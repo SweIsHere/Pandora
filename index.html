@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pandora</title>
+<link rel="stylesheet" href="style.css?v=9" />
+</head>
+<body>
+
+<header class="hdr">
+  <span class="logo">Pandora</span>
+  <span class="hdr-sub">atractores extraños</span>
+</header>
+
+<!-- side navigation (right-fixed, reference style) -->
+<nav class="side-nav">
+  <button class="nav-item active" data-sec="cc">
+    creative coding<span class="nav-ind">◄</span>
+  </button>
+  <button class="nav-item" data-sec="poemas">
+    poemas<span class="nav-ind">◄</span>
+  </button>
+</nav>
+
+<!-- ═══ HERO ═══ -->
+<div class="hero" id="hero">
+  <div class="hero-left">
+    <div class="panel-label">
+      <span>Lorenz — líneas vectoriales</span>
+      <button class="copy-btn" id="btn-expand-hero">↗ expandir</button>
+    </div>
+    <div id="hero-holder"></div>
+    <div class="drag-hint">arrastra para rotar</div>
+  </div>
+</div>
+
+<!-- ═══ SECTIONS ═══ -->
+<div class="below">
+
+  <!-- creative coding -->
+  <section id="sec-cc" class="sec active">
+    <div class="sec-head">
+      <h2 class="sec-title">creative coding</h2>
+      <p class="sec-hint">Atractores extraños — sube el tuyo</p>
+    </div>
+
+    <div id="gallery" class="gallery"></div>
+
+    <div class="upload">
+      <div class="upload-title">+ snippet propio</div>
+      <form id="snippet-form" autocomplete="off">
+        <div class="form-row">
+          <div class="field">
+            <label>nombre</label>
+            <input name="name" placeholder="Lorenz" required />
+          </div>
+          <div class="field">
+            <label>parámetros</label>
+            <input name="params" placeholder="a=10, b=28, c=2.6667" />
+          </div>
+          <div class="field" style="max-width:88px">
+            <label>dt</label>
+            <input name="dt" placeholder="0.006" />
+          </div>
+          <div class="field" style="max-width:56px">
+            <label>color</label>
+            <input type="color" name="color" value="#243ec4" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field full"><label>dx / dt</label><input name="dx" placeholder="a*(y-x)" required /></div>
+          <div class="field full"><label>dy / dt</label><input name="dy" placeholder="x*(b-z)-y" required /></div>
+          <div class="field full"><label>dz / dt</label><input name="dz" placeholder="x*y-c*z" required /></div>
+        </div>
+        <div class="form-btns">
+          <button class="btn-solid" type="submit">añadir</button>
+          <button class="btn-ghost" type="button" id="fill-demo">demo</button>
+          <button class="btn-ghost" type="button" id="cancel-edit" style="display:none">cancelar</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- poemas -->
+  <section id="sec-poemas" class="sec">
+    <div class="sec-head">
+      <h2 class="sec-title">poemas</h2>
+    </div>
+    <div class="poem-grid">
+      <form id="poem-form" class="poem-form-wrap" autocomplete="off">
+        <input name="title" placeholder="título" />
+        <textarea name="body" placeholder="escribe aquí…" required></textarea>
+        <button class="btn-solid" type="submit">guardar</button>
+      </form>
+      <div id="poems-list" class="poems-list"></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ═══ LIGHTBOX ═══ -->
+<div id="lightbox">
+  <div class="lb-inner">
+    <div class="lb-header">
+      <span id="lightbox-title" class="lb-title"></span>
+      <button id="lightbox-close" class="lb-close">×</button>
+    </div>
+    <div id="lightbox-holder" class="lb-holder"></div>
+    <div class="lb-controls">
+      <label class="lb-speed">
+        <span>velocidad</span>
+        <input type="range" id="lb-speed" min="10" max="5000" step="10" value="600" />
+      </label>
+      <button id="lb-replay" class="lb-btn">↻ reiniciar</button>
+    </div>
+    <div class="lb-hint">arrastra para rotar · ESC para cerrar</div>
+  </div>
+</div>
+
+<script src="p5.min.js"></script>
+<script src="sketch.js?v=9"></script>
+</body>
+</html>

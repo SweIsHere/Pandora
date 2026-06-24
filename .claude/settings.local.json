@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sk -L -o p5.min.js \"https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js\")",
+      "Bash(node --check sketch.js)",
+      "Bash(python -m http.server 5173)",
+      "PowerShell(Start-Process \"http://localhost:5173/\")",
+      "Bash(curl -s -o /dev/null -w '%{http_code}  __TRACKED_VAR__\\\\n' http://localhost:5173/__TRACKED_VAR__)",
+      "WebFetch(domain:x.com)",
+      "Bash(node --check \"c:\\\\Users\\\\tokio\\\\OneDrive\\\\Escritorio\\\\pandora\\\\sketch.js\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)"
+    ]
+  }
+}
