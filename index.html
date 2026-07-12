@@ -4,13 +4,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Pandora</title>
-<link rel="stylesheet" href="style.css?v=9" />
+<link rel="stylesheet" href="style.css?v=13" />
 </head>
 <body>
 
 <header class="hdr">
   <span class="logo">Pandora</span>
   <span class="hdr-sub">atractores extraños</span>
+  <span class="hdr-season" id="hdr-season">2026 · Verano</span>
 </header>
 
 <!-- side navigation (right-fixed, reference style) -->
@@ -28,7 +29,10 @@
   <div class="hero-left">
     <div class="panel-label">
       <span>Lorenz — líneas vectoriales</span>
-      <button class="copy-btn" id="btn-expand-hero">↗ expandir</button>
+      <div class="panel-actions">
+        <button class="copy-btn" id="btn-attractor-mode" title="alternar estética del atractor (tecla E)">✦ bruma</button>
+        <button class="copy-btn" id="btn-expand-hero">↗ expandir</button>
+      </div>
     </div>
     <div id="hero-holder"></div>
     <div class="drag-hint">arrastra para rotar</div>
@@ -118,7 +122,35 @@
   </div>
 </div>
 
-<script src="p5.min.js"></script>
-<script src="sketch.js?v=9"></script>
+<!-- ═══ RETRO PLAYER WIDGET (decorative status) ═══ -->
+<aside class="player" id="player">
+  <div class="player-bar">
+    <span class="dot"></span>
+    <span>OD player</span>
+    <span class="title">▶ ‖</span>
+  </div>
+  <div class="player-body">
+    <div class="player-thumb" aria-hidden="true">
+      <div class="player-eq"><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="player-meta">
+      <span class="lbl">now viewing</span>
+      <span class="val" id="player-val">creative coding</span>
+      <span class="lbl" id="player-sub">Lorenz</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ═══ POINTER FX ═══ -->
+<div id="fx-stage"></div>
+<canvas id="fx-rings"></canvas>
+<canvas id="fx-halftone"></canvas>
+<div id="cursor-ring"></div>
+<button id="fx-toggle" title="alternar efecto de puntero (tecla D)">✦ ondas</button>
+
+<script src="three.min.js"></script>
+<script src="sketch.js?v=13"></script>
+<script src="pointer-rings.js?v=1"></script>
+<script src="pointer.js?v=6"></script>
 </body>
 </html>

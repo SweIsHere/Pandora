@@ -8,7 +8,16 @@
       "Bash(curl -s -o /dev/null -w '%{http_code}  __TRACKED_VAR__\\\\n' http://localhost:5173/__TRACKED_VAR__)",
       "WebFetch(domain:x.com)",
       "Bash(node --check \"c:\\\\Users\\\\tokio\\\\OneDrive\\\\Escritorio\\\\pandora\\\\sketch.js\")",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5173/)",
+      "WebFetch(domain:hermes-agent.nousresearch.com)",
+      "WebSearch",
+      "Bash(curl -sL \"https://unpkg.com/three@0.160.0/build/three.min.js\" -o three.min.js)",
+      "Bash(rm -f _shot.png)",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless=new --disable-gpu --enable-unsafe-swiftshader --hide-scrollbars --window-size=1280,900 --virtual-time-budget=6000 --screenshot=\"_shot.png\" \"http://localhost:8123/index.html\")",
+      "Bash(mkdir -p /c/Users/tokio/AppData/Local/Temp/claude/chrome-shots)",
+      "Bash(\"/c/Program Files/Google/Chrome/Application/chrome.exe\" --headless=new --disable-gpu --enable-unsafe-swiftshader --hide-scrollbars --window-size=1280,900 --virtual-time-budget=6000 --user-data-dir=\"C:\\\\Users\\\\tokio\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\chrome-profile\" --screenshot=\"C:\\\\Users\\\\tokio\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\chrome-shots\\\\shot.png\" \"http://localhost:8123/index.html\")",
+      "Read(//c/Users/tokio/AppData/Local/Temp/claude/**)",
+      "Bash(git ls-tree *)"
     ]
   }
 }

@@ -1,8 +1,25 @@
 /* ============================================================
-   PANDORA — sketch.js v5
-   Rendering: líneas vectoriales (polyline) — beginShape/vertex
-   Trazo semi-transparente que se acumula; build-up progresivo
+   PANDORA — sketch.js  ·  three.js engine
+   ------------------------------------------------------------
+   · UN solo contexto WebGL compartido para TODOS los atractores
+     (hero, galería, lightbox) → se dibuja cada escena en un
+     sub-viewport y se hace blit a un <canvas> 2D de cada vista.
+     Esto rinde N tarjetas con un único contexto GPU.
+   · Cada atractor es una polilínea (THREE.Line) con un shader
+     de "flujo cometa": estructura tenue + cabezales brillantes.
+   · Estética "etérea", dos variantes intercambiables en vivo
+     (ver AESTHETIC / setAestheticMode):
+       - "nebulosa": fondo casi negro, el blit se repite borroso
+         y se compone en aditivo ("lighter") sobre el trazo nítido
+         → halo luminoso, como mirar una nebulosa por un ojo de buey.
+       - "bruma":    fondo claro (como antes), el mismo halo borroso
+         se compone en normal a baja opacidad → niebla pastel suave
+         alrededor del trazo nítido.
+     El post-proceso vive en applyGlow(); reemplaza el dithering
+     Bayer que tenía esta escena anteriormente.
    ============================================================ */
+
+const THREE = window.THREE;
 
 const DEFAULTS = [
   {
@@ -26,7 +43,9 @@ const DEFAULTS = [
   }
 ];
 
-/* ── utils ── */
+const DEFAULT_COLOR = "#243ec4";
+
+/* ── utils numéricos ── */
 function hexToRgb(h) {
   const v = parseInt(h.replace("#", ""), 16);
   return [(v >> 16) & 255, (v >> 8) & 255, v & 255];
@@ -51,6 +70,11 @@ function buildDeriv(def) {
     "with(Math){return [(" + def.dx + "),(" + def.dy + "),(" + def.dz + ")];}"
   );
   return (x, y, z) => fn(x, y, z, ...vals);
+}
+
+function lorenzDeriv(x, y, z) {
+  const s = 10, r = 28, b = 8 / 3;
+  return [s * (y - x), x * (r - z) - y, x * y - b * z];
 }
 
 function rk4(deriv, px, py, pz, dt) {
@@ -88,168 +112,277 @@ function precompute(deriv, init, dt, N, warmup = 1500) {
   return { pts, cx, cy, cz, span, count };
 }
 
-/* Escala de render interno < 1 → el canvas se dibuja a menor resolución
-   y el CSS lo amplía con image-rendering:pixelated → pixelado ligero. */
-const PIXEL_SCALE = 0.6;
+/* ============================================================
+   MOTOR WebGL COMPARTIDO
+   ============================================================ */
+/* densidad de render interna < 1 → el canvas se dibuja a menor
+   resolución; el CSS ya no la pixela (ver .gl-canvas), así que el
+   halo del glow queda suave al escalar. */
+const PIXEL_SCALE = 0.85;
 
-/* Matriz Bayer 4×4 para un dithering ordenado mínimo. */
-const BAYER = [
-  [ 0,  8,  2, 10],
-  [12,  4, 14,  6],
-  [ 3, 11,  1,  9],
-  [15,  7, 13,  5]
-];
+const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: "high-performance" });
+renderer.setPixelRatio(1);
+renderer.autoClear = true;
+const glCanvas = renderer.domElement;
 
-/* Aplica un dithering minúsculo SOLO a los píxeles más tenues (la estructura
-   del atractor), dejando intactos los cometas brillantes → textura granulada. */
-function applyDither(p) {
-  const W = p.width, H = p.height;
-  const FAINT = 64;            // umbral: solo píxeles casi-blancos se estipulan
-  p.loadPixels();
-  const px = p.pixels;
-  for (let y = 0; y < H; y++) {
-    const row = BAYER[y & 3];
-    for (let x = 0; x < W; x++) {
-      const k = 4 * (y * W + x);
-      const r = px[k], g = px[k+1], b = px[k+2];
-      const mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
-      const dist = 255 - mn;    // 0 = blanco puro, mayor = más color
-      if (dist > 4 && dist < FAINT) {
-        const thr = (row[x & 3] + 0.5) / 16 * FAINT;
-        if (dist < thr) { px[k] = 255; px[k+1] = 255; px[k+2] = 255; }
-      }
-    }
+let bufW = 1, bufH = 1;               // tamaño actual del framebuffer compartido
+const registry = new Set();           // todas las vistas de atractor vivas
+
+/* ── estética etérea: dos variantes, alternables en vivo ── */
+const ATTR_KEY = "pandora_attr_mode";
+let AESTHETIC_MODE = localStorage.getItem(ATTR_KEY) === "bruma" ? "bruma" : "nebulosa";
+
+const AESTHETIC = {
+  nebulosa: {
+    clearColor: new THREE.Color(0x06070c),   // casi negro
+    glowOp: "lighter",                       // aditivo → glow luminoso
+    glowAlpha: 0.6, blurFrac: 0.05, blurMin: 2
+  },
+  bruma: {
+    clearColor: new THREE.Color(0xffffff),   // fondo claro del sitio
+    glowOp: "source-over",                   // normal → niebla suave
+    glowAlpha: 0.4, blurFrac: 0.035, blurMin: 1.5
   }
-  p.updatePixels();
+};
+function currentAesthetic() { return AESTHETIC[AESTHETIC_MODE]; }
+
+function setAestheticMode(m) {
+  AESTHETIC_MODE = m === "bruma" ? "bruma" : "nebulosa";
+  try { localStorage.setItem(ATTR_KEY, AESTHETIC_MODE); } catch (e) {}
+  document.body.classList.toggle("attr-nebulosa", AESTHETIC_MODE === "nebulosa");
+  const btn = document.getElementById("btn-attractor-mode");
+  if (btn) btn.textContent = AESTHETIC_MODE === "nebulosa" ? "✦ bruma" : "✦ nebulosa";
 }
 
-/* Render "flujo cometa":
-   - la parte ya revelada de la trayectoria se dibuja tenue (estructura)
-   - varios cabezales brillantes recorren la curva dejando una cola que
-     se desvanece → puntos en movimiento continuo sobre el atractor
-   drawn  = cuántos puntos de la estructura están revelados (build-up)
-   base   = fase de avance de los cabezales
-   heads  = nº de cometas equiespaciados
-   trail  = longitud (en puntos) de la cola */
-function renderFlow(p, pts, drawn, base, heads, trail, cx, cy, cz, span, rotX, rotY, color) {
-  const W = p.width, H = p.height;
-  const scale = Math.min(W, H) * 0.80 / span;
-  const halfW = W / 2, halfH = H / 2;
-  const cX=Math.cos(rotX), sX=Math.sin(rotX);
-  const cY=Math.cos(rotY), sY=Math.sin(rotY);
-  const r=color[0], g=color[1], b=color[2];
-
-  p.background(255);
-  if (drawn < 2) return;
-
-  // ── estructura tenue ya revelada ──
-  p.noFill();
-  p.strokeJoin(p.ROUND);
-  p.strokeWeight(0.9);
-  p.stroke(r, g, b, 34);
-  p.beginShape();
-  for (let i = 0; i < drawn; i++) {
-    const ax=pts[i*3]-cx, ay=pts[i*3+1]-cy, az=pts[i*3+2]-cz;
-    const bx= ax*cY + az*sY;
-    const bz=-ax*sY + az*cY;
-    const by= ay*cX - bz*sX;
-    p.vertex(halfW + bx*scale, halfH - by*scale);
+/* Shader del "flujo cometa" — trazo azul sobre blanco, blending normal ── */
+const COMET_VERT = `
+  attribute float aProg;
+  varying float vProg;
+  void main() {
+    vProg = aProg;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
-  p.endShape();
-
-  const hr = Math.max(1.4, Math.min(W, H) * 0.008);
-
-  // ── cometas ──
-  for (let k = 0; k < heads; k++) {
-    const head = (base + Math.floor(k * drawn / heads)) % drawn;
-    const start = Math.max(1, head - trail);
-
-    let i0 = start - 1;
-    let ax=pts[i0*3]-cx, ay=pts[i0*3+1]-cy, az=pts[i0*3+2]-cz;
-    let bx= ax*cY+az*sY, bz=-ax*sY+az*cY, by=ay*cX-bz*sX;
-    let prevX=halfW+bx*scale, prevY=halfH-by*scale;
-
-    const denom = (head - start) || 1;
-    for (let i = start; i <= head; i++) {
-      const a2=pts[i*3]-cx, b2=pts[i*3+1]-cy, c2=pts[i*3+2]-cz;
-      const bx2= a2*cY+c2*sY, bz2=-a2*sY+c2*cY, by2=b2*cX-bz2*sX;
-      const x=halfW+bx2*scale, y=halfH-by2*scale;
-      const f=(i-start)/denom;                 // 0 cola → 1 cabeza
-      p.strokeWeight(0.4 + f*1.0);
-      p.stroke(r, g, b, 40 + f*215);
-      p.line(prevX, prevY, x, y);
-      prevX=x; prevY=y;
+`;
+const COMET_FRAG = `
+  precision highp float;
+  uniform vec3  uColor;
+  uniform float uReveal;
+  uniform float uTrail;
+  uniform float uBase;
+  uniform float uHeads[4];
+  uniform int   uHeadCount;
+  varying float vProg;
+  void main() {
+    if (vProg > uReveal) discard;
+    float a = uBase;                       // estructura tenue ya revelada
+    for (int k = 0; k < 4; k++) {
+      if (k >= uHeadCount) break;
+      float d = uHeads[k] - vProg;
+      if (d < 0.0) d += uReveal;           // envolver dentro de lo revelado
+      if (d < uTrail) {
+        float f = 1.0 - d / uTrail;        // 0 cola → 1 cabeza
+        float trailA = mix(0.16, 1.0, f);
+        a = max(a, trailA);
+      }
     }
+    gl_FragColor = vec4(uColor, clamp(a, 0.0, 1.0));
+  }
+`;
 
-    // cabeza brillante con halo
-    const hax=pts[head*3]-cx, hay=pts[head*3+1]-cy, haz=pts[head*3+2]-cz;
-    const hbx= hax*cY+haz*sY, hbz=-hax*sY+haz*cY, hby=hay*cX-hbz*sX;
-    const hx=halfW+hbx*scale, hy=halfH-hby*scale;
-    p.noStroke();
-    p.fill(r, g, b, 50);  p.circle(hx, hy, hr*2.2);
-    p.fill(r, g, b, 255); p.circle(hx, hy, hr);
+/* Halo etéreo: recorta el mismo frame recién renderizado, lo
+   desenfoca con el filtro nativo del canvas 2D y lo compone sobre
+   el trazo nítido — aditivo en "nebulosa", suave en "bruma".
+   Un único canvas de trabajo, reutilizado para todas las vistas
+   (se procesan de a una por frame, nunca en paralelo). */
+const glowScratch = document.createElement("canvas");
+const glowCtx = glowScratch.getContext("2d");
+
+function applyGlow(v) {
+  const a = currentAesthetic();
+  if (glowScratch.width !== v.dw || glowScratch.height !== v.dh) {
+    glowScratch.width = v.dw;
+    glowScratch.height = v.dh;
+  }
+  glowCtx.clearRect(0, 0, v.dw, v.dh);
+  glowCtx.drawImage(glCanvas, 0, 0, v.dw, v.dh, 0, 0, v.dw, v.dh);
+
+  const blurPx = Math.max(a.blurMin, v.dw * a.blurFrac);
+  v.ctx.save();
+  v.ctx.filter = "blur(" + blurPx.toFixed(2) + "px)";
+  v.ctx.globalCompositeOperation = a.glowOp;
+  v.ctx.globalAlpha = a.glowAlpha;
+  v.ctx.drawImage(glowScratch, 0, 0);
+  v.ctx.restore();
+}
+
+function makeAttractorScene(def, N, opts) {
+  const deriv = def._lorenz ? lorenzDeriv : buildDeriv(def);
+  // validación rápida
+  const t0 = deriv(def.init[0], def.init[1], def.init[2]);
+  if (!t0.every(isFinite)) throw new Error("diverge");
+
+  const r = precompute(deriv, def.init || [0.1,0,0], def.dt || 0.006, N);
+  if (r.count < 8) throw new Error("sin puntos");
+
+  const n = r.count;
+  const positions = new Float32Array(n * 3);
+  const prog = new Float32Array(n);
+  const inv = 1.9 / r.span;
+  for (let i = 0; i < n; i++) {
+    positions[i*3]   = (r.pts[i*3]   - r.cx) * inv;
+    positions[i*3+1] = (r.pts[i*3+1] - r.cy) * inv;
+    positions[i*3+2] = (r.pts[i*3+2] - r.cz) * inv;
+    prog[i] = i / (n - 1);
   }
 
-  applyDither(p);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute("aProg", new THREE.BufferAttribute(prog, 1));
+
+  const col = new THREE.Color(def.color || DEFAULT_COLOR);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor:     { value: col },
+      uReveal:    { value: 0.0 },
+      uTrail:     { value: opts.trail },
+      uBase:      { value: opts.base },
+      uHeads:     { value: [0,0,0,0] },
+      uHeadCount: { value: opts.heads }
+    },
+    vertexShader: COMET_VERT,
+    fragmentShader: COMET_FRAG,
+    transparent: true,
+    blending: THREE.NormalBlending,
+    depthTest: false,
+    depthWrite: false
+  });
+
+  const line = new THREE.Line(geo, mat);
+  const group = new THREE.Group();
+  group.add(line);
+  group.rotation.x = opts.tiltX || 0.3;
+
+  const scene = new THREE.Scene();
+  scene.add(group);
+
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+  camera.position.set(0, 0, 3.4);
+  camera.lookAt(0, 0, 0);
+
+  return { scene, camera, group, mat, total: n };
+}
+
+/* Una VISTA = un <canvas> 2D destino + su escena three.js */
+function createView(hostCanvas, def, N, opts) {
+  const ctx = hostCanvas.getContext("2d");
+  let sc;
+  try { sc = makeAttractorScene(def, N, opts); }
+  catch (e) { drawError(ctx, hostCanvas); return null; }
+
+  const view = {
+    canvas: hostCanvas, ctx, ...sc,
+    dw: 1, dh: 1, active: false, scale: 1,
+    rotX: opts.tiltX || 0.3, rotY: 0, dragging: false,
+    reveal: 0, phase: 0,
+    growth: opts.growth, spin: opts.spin,
+    speedEl: opts.speedEl || null,
+    reset() { this.reveal = 0; this.phase = 0; },
+    dispose() {
+      this.active = false;
+      registry.delete(this);
+      this.group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+      this.mat.dispose();
+    },
+    step() {
+      const grow = this.speedEl ? (parseInt(this.speedEl.value) || 600) / 60000 : this.growth;
+      if (this.reveal < 1) this.reveal = Math.min(1, this.reveal + grow);
+      if (!this.dragging) this.rotY += this.spin;
+      this.phase = (this.phase + grow * 6) % 1;
+      const R = this.reveal;
+      const hu = this.mat.uniforms.uHeads.value;
+      const hc = this.mat.uniforms.uHeadCount.value;
+      for (let k = 0; k < hc; k++) hu[k] = ((this.phase + k / hc) % 1) * R;
+      this.mat.uniforms.uReveal.value = R;
+      this.group.rotation.x = this.rotX;
+      this.group.rotation.y = this.rotY;
+    }
+  };
+  registry.add(view);
+  return view;
+}
+
+function drawError(ctx, cv) {
+  const w = cv.width || 200, h = cv.height || 200;
+  ctx.fillStyle = "#ffffff"; ctx.fillRect(0,0,w,h);
+  ctx.fillStyle = "#b43c3c"; ctx.font = "13px monospace";
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  ctx.fillText("error", w/2, h/2);
+}
+
+/* ── ajuste de tamaño (backing store) de una vista ── */
+function fitView(v) {
+  const cssW = v.canvas.clientWidth || 300;
+  const cssH = v.canvas.clientHeight || 300;
+  const w = Math.max(1, Math.round(cssW * PIXEL_SCALE));
+  const h = Math.max(1, Math.round(cssH * PIXEL_SCALE));
+  if (v.canvas.width !== w)  v.canvas.width  = w;
+  if (v.canvas.height !== h) v.canvas.height = h;
+  v.dw = w; v.dh = h;
+  if (v.camera && v.camera.isPerspectiveCamera) {
+    v.camera.aspect = w / h;
+    v.camera.updateProjectionMatrix();
+  }
+}
+
+function drawView(v) {
+  renderer.setViewport(0, bufH - v.dh, v.dw, v.dh);
+  renderer.setScissor(0, bufH - v.dh, v.dw, v.dh);
+  renderer.setScissorTest(true);
+  renderer.setClearColor(currentAesthetic().clearColor, 1);
+  renderer.render(v.scene, v.camera);
+  v.ctx.drawImage(glCanvas, 0, 0, v.dw, v.dh, 0, 0, v.dw, v.dh);
+  applyGlow(v);
+}
+
+/* ── bucle central ── */
+function loop() {
+  const live = [];
+  registry.forEach(v => { if (v.active) live.push(v); });
+
+  let maxW = 1, maxH = 1;
+  for (const v of live) { fitView(v); if (v.dw > maxW) maxW = v.dw; if (v.dh > maxH) maxH = v.dh; }
+  if (maxW !== bufW || maxH !== bufH) { renderer.setSize(maxW, maxH, false); bufW = maxW; bufH = maxH; }
+
+  for (const v of live) { v.step(); drawView(v); }
+  requestAnimationFrame(loop);
+}
+
+/* rotación por arrastre en un canvas de vista */
+function attachDrag(view) {
+  const el = view.canvas;
+  el.addEventListener("pointerdown", e => { view.dragging = true; el.setPointerCapture(e.pointerId); });
+  el.addEventListener("pointerup",   e => { view.dragging = false; });
+  el.addEventListener("pointercancel", () => { view.dragging = false; });
+  el.addEventListener("pointermove", e => {
+    if (!view.dragging) return;
+    view.rotY += e.movementX * 0.008;
+    view.rotX += e.movementY * 0.008;
+    view.rotX = Math.max(-1.4, Math.min(1.4, view.rotX));
+  });
 }
 
 /* ═══ HERO ═══ */
 function makeHero(holder) {
-  const N = 32000, GROW = 200;
-  const FG = [36, 62, 196];
-
-  return new p5(p => {
-    let pts, cx, cy, cz, span, total;
-    let rotX = 0.25, rotY = 0;
-    let renderN = 0, base = 0;
-
-    const dt = 0.006;
-    function lorenz(x,y,z) {
-      const σ=10, ρ=28, β=8/3;
-      return [σ*(y-x), x*(ρ-z)-y, x*y-β*z];
-    }
-
-    function sizeOf() {
-      const w = (holder.clientWidth || 600) * PIXEL_SCALE;
-      const h = (holder.clientHeight || 600) * PIXEL_SCALE;
-      return [Math.max(1, Math.round(w)), Math.max(1, Math.round(h))];
-    }
-
-    p.setup = function() {
-      const [w,h] = sizeOf();
-      const c = p.createCanvas(w, h);
-      c.parent(holder);
-      p.pixelDensity(1); p.noSmooth();
-      p.frameRate(30);
-      const r = precompute(lorenz, [0.1,0,0], dt, N);
-      pts=r.pts; cx=r.cx; cy=r.cy; cz=r.cz; span=r.span; total=r.count;
-    };
-
-    p.windowResized = function() {
-      const [w,h] = sizeOf();
-      p.resizeCanvas(w, h);
-    };
-
-    p.mouseDragged = function() {
-      const over = p.mouseX>=0&&p.mouseX<=p.width&&p.mouseY>=0&&p.mouseY<=p.height;
-      if(!over) return;
-      rotY += (p.mouseX-p.pmouseX)*0.010;
-      rotX += (p.mouseY-p.pmouseY)*0.010;
-      rotX = Math.max(-1.4, Math.min(1.4, rotX));
-    };
-
-    p.draw = function() {
-      if(!p.mouseIsPressed) rotY += 0.0035;
-      if(renderN < total) renderN = Math.min(renderN+GROW, total);
-      base = (base + GROW) % Math.max(1, renderN);
-      const trail = Math.max(40, (total*0.05)|0);
-      renderFlow(p, pts, renderN, base, 3, trail, cx, cy, cz, span, rotX, rotY, FG);
-    };
-  }, holder);
+  const cv = document.createElement("canvas");
+  cv.className = "gl-canvas";
+  holder.appendChild(cv);
+  const view = createView(cv, { name:"Lorenz", color:"#243ec4", dt:0.006, _lorenz:true, init:[0.1,0,0] },
+    32000, { trail: 0.06, base: 0.13, heads: 3, tiltX: 0.28, growth: 0.006, spin: 0.0032 });
+  if (view) { view.active = true; attachDrag(view); }
 }
 
 /* ═══ LIGHTBOX ═══ */
-let lightboxInst = null;
+let lightboxView = null;
 
 function openLightbox(def) {
   const overlay = document.getElementById("lightbox");
@@ -257,98 +390,40 @@ function openLightbox(def) {
   document.getElementById("lightbox-title").textContent = def.name;
   const holder = document.getElementById("lightbox-holder");
   holder.innerHTML = "";
+  const cv = document.createElement("canvas");
+  cv.className = "gl-canvas";
+  holder.appendChild(cv);
 
-  const N = 60000;
-  const fg = def.color ? hexToRgb(def.color) : [36,62,196];
   const speedEl = document.getElementById("lb-speed");
-
-  lightboxInst = new p5(p => {
-    let pts, cx, cy, cz, span, total;
-    let rotX = 0.3, rotY = 0;
-    let renderN = 0, base = 0;
-    let broken = false;
-
-    function sizeOf() {
-      const w = (holder.clientWidth || 600) * PIXEL_SCALE;
-      const h = (holder.clientHeight || 600) * PIXEL_SCALE;
-      return [Math.max(1, Math.round(w)), Math.max(1, Math.round(h))];
-    }
-
-    p.setup = function() {
-      const [w,h] = sizeOf();
-      const c = p.createCanvas(w, h);
-      c.parent(holder);
-      p.pixelDensity(1); p.noSmooth();
-      p.frameRate(30);
-      try {
-        let deriv;
-        if(def._lorenz) {
-          deriv=(x,y,z)=>{const σ=10,ρ=28,β=8/3;return[σ*(y-x),x*(ρ-z)-y,x*y-β*z];};
-        } else {
-          deriv = buildDeriv(def);
-        }
-        const r = precompute(deriv, def.init||[0.1,0,0], def.dt||0.006, N);
-        pts=r.pts; cx=r.cx; cy=r.cy; cz=r.cz; span=r.span; total=r.count;
-      } catch { broken=true; }
-    };
-
-    p.windowResized = function() {
-      const [w,h] = sizeOf();
-      p.resizeCanvas(w, h);
-    };
-
-    p.mouseDragged = function() {
-      const over=p.mouseX>=0&&p.mouseX<=p.width&&p.mouseY>=0&&p.mouseY<=p.height;
-      if(!over) return;
-      rotY += (p.mouseX-p.pmouseX)*0.010;
-      rotX += (p.mouseY-p.pmouseY)*0.010;
-      rotX = Math.max(-1.4, Math.min(1.4, rotX));
-    };
-
-    p.replay = function() { renderN = 0; base = 0; };
-
-    p.draw = function() {
-      if(broken){p.background(255);p.noLoop();return;}
-      rotY += 0.0035;
-      const grow = parseInt(speedEl && speedEl.value) || 800;
-      if(renderN < total) renderN = Math.min(renderN+grow, total);
-      base = (base + grow) % Math.max(1, renderN);
-      const trail = Math.max(60, (total*0.05)|0);
-      renderFlow(p, pts, renderN, base, 3, trail, cx, cy, cz, span, rotX, rotY, fg);
-    };
-  }, holder);
+  lightboxView = createView(cv, def, 60000,
+    { trail: 0.05, base: 0.13, heads: 3, tiltX: 0.3, spin: 0.003, speedEl });
+  if (lightboxView) { lightboxView.active = true; attachDrag(lightboxView); }
 }
 
 function closeLightbox() {
-  if(lightboxInst){lightboxInst.remove();lightboxInst=null;}
+  if (lightboxView) { lightboxView.dispose(); lightboxView = null; }
   document.getElementById("lightbox").classList.remove("open");
-  document.getElementById("lightbox-holder").innerHTML="";
+  document.getElementById("lightbox-holder").innerHTML = "";
 }
 
-/* ═══ GALLERY CARDS ═══ */
-const galleryInstances = new Map();
+/* ═══ TARJETAS DE GALERÍA ═══ */
+const cardViews = new Map();   // wrap element → view
 
 const io = new IntersectionObserver(entries => {
   entries.forEach(e => {
-    const inst = galleryInstances.get(e.target);
-    if(!inst) return;
-    if(e.isIntersecting) {
-      if(inst.resetAnim) inst.resetAnim();
-      inst.loop();
-    } else {
-      inst.noLoop();
-    }
+    const v = cardViews.get(e.target);
+    if (!v) return;
+    if (e.isIntersecting) { v.reset(); v.active = true; }
+    else v.active = false;
   });
-}, {threshold:0.05});
+}, { threshold: 0.05 });
 
 let editingId = null;
 
 function makeCard(def, isUser) {
-  const N = 16000, GROW = 130;
-
   const card = document.createElement("div");
   card.className = "card";
-  if(def.id) card.dataset.id = def.id;
+  if (def.id) card.dataset.id = def.id;
 
   const eqText =
     "dx = "+def.dx+"\ndy = "+def.dy+"\ndz = "+def.dz+
@@ -356,7 +431,7 @@ function makeCard(def, isUser) {
 
   card.innerHTML =
     (isUser ? '<span class="own-tag">propio</span>' : "")+
-    '<div class="card-wrap"></div>'+
+    '<div class="card-wrap"><canvas class="gl-canvas"></canvas></div>'+
     '<div class="card-bar">'+
       '<span class="card-name"></span>'+
       '<div class="card-btns">'+
@@ -371,21 +446,22 @@ function makeCard(def, isUser) {
   card.querySelector(".card-eq").textContent   = eqText;
 
   const wrap = card.querySelector(".card-wrap");
+  const cv   = card.querySelector("canvas");
   wrap.title = "clic para ver en grande";
-
   wrap.addEventListener("click", () => openLightbox(def));
 
-  card.querySelector(".t-eq").addEventListener("click", () => {
+  card.querySelector(".t-eq").addEventListener("click", ev => {
+    ev.stopPropagation();
     card.querySelector(".card-eq").classList.toggle("show");
   });
 
-  if(isUser) {
+  if (isUser) {
     card.querySelector(".t-edit").addEventListener("click", () => startEdit(def, card));
     card.querySelector(".t-del").addEventListener("click", () => {
-      if(!confirm('¿Eliminar "'+def.name+'"?')) return;
+      if (!confirm('¿Eliminar "'+def.name+'"?')) return;
       removeSnippet(def.id);
-      const inst = galleryInstances.get(wrap);
-      if(inst){inst.remove();galleryInstances.delete(wrap);}
+      const v = cardViews.get(wrap);
+      if (v) { v.dispose(); cardViews.delete(wrap); }
       io.unobserve(wrap);
       card.remove();
     });
@@ -393,88 +469,35 @@ function makeCard(def, isUser) {
 
   document.getElementById("gallery").appendChild(card);
 
-  const fg = hexToRgb(def.color);
-
-  const inst = new p5(p => {
-    let pts, cx, cy, cz, span, total;
-    let rotY = 0;
-    let renderN = 0, base = 0;
-    let broken = false;
-
-    p.resetAnim = () => { renderN = 0; base = 0; };
-
-    function sizeOf() {
-      const w = (wrap.clientWidth || 300) * PIXEL_SCALE;
-      const h = (wrap.clientHeight || 300) * PIXEL_SCALE;
-      return [Math.max(1, Math.round(w)), Math.max(1, Math.round(h))];
-    }
-
-    p.setup = function() {
-      const [w,h] = sizeOf();
-      const c = p.createCanvas(w, h);
-      c.parent(wrap);
-      p.pixelDensity(1); p.noSmooth();
-      p.frameRate(30);
-      let deriv;
-      try {
-        deriv = buildDeriv(def);
-        const test = deriv(def.init[0], def.init[1], def.init[2]);
-        if(!test.every(isFinite)) throw new Error("diverges");
-      } catch { broken=true; return; }
-      try {
-        const r = precompute(deriv, def.init, def.dt, N);
-        pts=r.pts; cx=r.cx; cy=r.cy; cz=r.cz; span=r.span; total=r.count;
-      } catch { broken=true; }
-    };
-
-    p.windowResized = function() {
-      const [w,h] = sizeOf();
-      p.resizeCanvas(w, h);
-    };
-
-    p.draw = function() {
-      if(broken){
-        p.background(255);
-        p.fill(180,60,60); p.noStroke();
-        p.textSize(11); p.textAlign(p.CENTER,p.CENTER);
-        p.text("error", p.width/2, p.height/2);
-        p.noLoop(); return;
-      }
-      rotY += 0.005;
-      if(renderN < total) renderN = Math.min(renderN+GROW, total);
-      base = (base + GROW) % Math.max(1, renderN);
-      const trail = Math.max(40, (total*0.05)|0);
-      renderFlow(p, pts, renderN, base, 2, trail, cx, cy, cz, span, 0.3, rotY, fg);
-    };
-  }, wrap);
-
-  galleryInstances.set(wrap, inst);
-  io.observe(wrap);
+  const view = createView(cv, def, 16000,
+    { trail: 0.05, base: 0.13, heads: 2, tiltX: 0.3, growth: 0.008, spin: 0.005 });
+  if (view) {
+    cardViews.set(wrap, view);
+    io.observe(wrap);
+  }
 }
 
-/* ── navegación entre pestañas ── */
+/* ── navegación ── */
 function showSection(sec) {
   document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.sec === sec));
   document.querySelectorAll(".sec").forEach(s => s.classList.remove("active"));
   document.getElementById("sec-" + sec).classList.add("active");
-  // el atractor hero solo vive en la pestaña creative coding
   document.getElementById("hero").style.display = (sec === "cc") ? "block" : "none";
 }
 
-/* ── Edit ── */
+/* ── edición ── */
 function startEdit(def, card) {
   editingId = def.id;
   const sf = document.getElementById("snippet-form");
   sf.querySelector('[name="name"]').value   = def.name;
   sf.querySelector('[name="params"]').value = def.params || "";
   sf.querySelector('[name="dt"]').value     = def.dt || "";
-  sf.querySelector('[name="color"]').value  = def.color || "#243ec4";
+  sf.querySelector('[name="color"]').value  = def.color || DEFAULT_COLOR;
   sf.querySelector('[name="dx"]').value     = def.dx;
   sf.querySelector('[name="dy"]').value     = def.dy;
   sf.querySelector('[name="dz"]').value     = def.dz;
   sf.querySelector('.btn-solid').textContent = "actualizar";
   document.getElementById("cancel-edit").style.display = "inline-flex";
-
   showSection("cc");
   document.querySelector(".upload").scrollIntoView({behavior:"smooth", block:"start"});
 }
@@ -484,52 +507,55 @@ function cancelEdit() {
   const sf = document.getElementById("snippet-form");
   sf.querySelector('.btn-solid').textContent = "añadir";
   sf.reset();
-  sf.querySelector('[name="color"]').value = "#243ec4";
+  sf.querySelector('[name="color"]').value = DEFAULT_COLOR;
   document.getElementById("cancel-edit").style.display = "none";
 }
 
 /* ── localStorage ── */
 const SNAP_KEY = "pandora_snippets";
 const POEM_KEY = "pandora_poems";
-
 function loadSnippets(){try{return JSON.parse(localStorage.getItem(SNAP_KEY))||[];}catch{return[];}}
 function saveSnippets(a){try{localStorage.setItem(SNAP_KEY,JSON.stringify(a));}catch{}}
 function removeSnippet(id){saveSnippets(loadSnippets().filter(s=>s.id!==id));}
-
 function loadPoems(){try{return JSON.parse(localStorage.getItem(POEM_KEY))||[];}catch{return[];}}
 function savePoems(a){try{localStorage.setItem(POEM_KEY,JSON.stringify(a));}catch{}}
 
 /* ── BOOT ── */
 window.addEventListener("DOMContentLoaded", () => {
-
+  setAestheticMode(AESTHETIC_MODE);
   makeHero(document.getElementById("hero-holder"));
+  loop();
 
   document.getElementById("btn-expand-hero").addEventListener("click", () => {
     openLightbox({name:"Lorenz", color:"#243ec4", dt:0.006, _lorenz:true, init:[0.1,0,0]});
   });
 
-  // navigation
+  const attrBtn = document.getElementById("btn-attractor-mode");
+  if (attrBtn) attrBtn.addEventListener("click", () => {
+    setAestheticMode(AESTHETIC_MODE === "nebulosa" ? "bruma" : "nebulosa");
+  });
+  document.addEventListener("keydown", e => {
+    if ((e.key === "e" || e.key === "E") && !/input|textarea/i.test(e.target.tagName)) {
+      setAestheticMode(AESTHETIC_MODE === "nebulosa" ? "bruma" : "nebulosa");
+    }
+  });
+
   document.querySelectorAll(".nav-item").forEach(btn => {
     btn.addEventListener("click", () => showSection(btn.dataset.sec));
   });
 
-  // lightbox close
   document.getElementById("lightbox").addEventListener("click", e => {
-    if(e.target === e.currentTarget) closeLightbox();
+    if (e.target === e.currentTarget) closeLightbox();
   });
   document.getElementById("lightbox-close").addEventListener("click", closeLightbox);
-  document.addEventListener("keydown", e => { if(e.key==="Escape") closeLightbox(); });
-
-  // reiniciar la formación del atractor en el visor
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeLightbox(); });
   document.getElementById("lb-replay").addEventListener("click", () => {
-    if(lightboxInst && lightboxInst.replay) lightboxInst.replay();
+    if (lightboxView) lightboxView.reset();
   });
 
-  // gallery
   DEFAULTS.forEach(d => makeCard(d, false));
   loadSnippets().forEach(s => makeCard(s, true));
 
-  // snippet form
   const sf = document.getElementById("snippet-form");
   sf.addEventListener("submit", e => {
     e.preventDefault();
@@ -537,7 +563,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const dtVal = parseFloat(f.get("dt"));
     const def = {
       name:   (f.get("name") || "sin nombre").trim(),
-      color:  f.get("color") || "#243ec4",
+      color:  f.get("color") || DEFAULT_COLOR,
       params: (f.get("params") || "").trim(),
       dx: f.get("dx").trim(), dy: f.get("dy").trim(), dz: f.get("dz").trim(),
       dt: isFinite(dtVal) && dtVal > 0 ? dtVal : 0.01,
@@ -546,18 +572,17 @@ window.addEventListener("DOMContentLoaded", () => {
     try { buildDeriv(def)(1,1,1); }
     catch(err) { alert("Error en las ecuaciones:\n"+err.message); return; }
 
-    if(editingId) {
+    if (editingId) {
       def.id = editingId;
       const all = loadSnippets();
       const idx = all.findIndex(s => s.id === editingId);
-      if(idx !== -1) all[idx] = def;
+      if (idx !== -1) all[idx] = def;
       saveSnippets(all);
-
       const oldCard = document.querySelector('[data-id="'+editingId+'"]');
-      if(oldCard) {
+      if (oldCard) {
         const wrap = oldCard.querySelector(".card-wrap");
-        const inst = galleryInstances.get(wrap);
-        if(inst){inst.remove();galleryInstances.delete(wrap);}
+        const v = cardViews.get(wrap);
+        if (v) { v.dispose(); cardViews.delete(wrap); }
         io.unobserve(wrap);
         oldCard.remove();
       }
@@ -568,20 +593,19 @@ window.addEventListener("DOMContentLoaded", () => {
       const all = loadSnippets(); all.push(def); saveSnippets(all);
       makeCard(def, true);
       sf.reset();
-      sf.querySelector('[name="color"]').value = "#243ec4";
+      sf.querySelector('[name="color"]').value = DEFAULT_COLOR;
     }
   });
 
   document.getElementById("fill-demo").addEventListener("click", () => {
     const d = {name:"Lorenz propio", params:"a=10, b=28, c=2.6667",
       dx:"a*(y-x)", dy:"x*(b-z)-y", dz:"x*y-c*z", dt:"0.006"};
-    for(const [k,v] of Object.entries(d))
+    for (const [k,v] of Object.entries(d))
       sf.querySelector('[name="'+k+'"]').value = v;
   });
 
   document.getElementById("cancel-edit").addEventListener("click", cancelEdit);
 
-  // poems
   const pf = document.getElementById("poem-form");
   pf.addEventListener("submit", e => {
     e.preventDefault();
@@ -603,7 +627,7 @@ function renderPoems() {
   const list = document.getElementById("poems-list");
   const poems = loadPoems();
   list.innerHTML = "";
-  if(!poems.length) {
+  if (!poems.length) {
     list.innerHTML = '<p class="empty-msg">el primero te espera al lado.</p>';
     return;
   }
@@ -617,7 +641,7 @@ function renderPoems() {
     el.querySelector(".poem-date").textContent = pm.date;
     el.querySelector(".poem-body").textContent = pm.body;
     el.querySelector(".poem-del").addEventListener("click", () => {
-      if(!confirm("¿Borrar este poema?")) return;
+      if (!confirm("¿Borrar este poema?")) return;
       savePoems(loadPoems().filter(x => x.id !== pm.id));
       renderPoems();
     });
