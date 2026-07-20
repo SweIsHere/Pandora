@@ -33,11 +33,18 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body {
+/* El papel va en <html>; el <body> queda transparente para que el
+   canvas de koi (#koi-bg, z-index:-1) se pinte SOBRE el papel y
+   DEBAJO del contenido. Si el fondo estuviera en el body, el canvas
+   negativo quedaría oculto tras él. */
+html {
   background:
     radial-gradient(120% 90% at 100% 0%, var(--bg-cool) 0%, rgba(215,224,228,0) 45%),
     var(--bg);
   background-attachment: fixed;
+}
+body {
+  background: transparent;
   color: var(--text);
   font-family: "FOTSkip", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -78,6 +85,37 @@ body::after {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
   opacity: .04;
 }
+
+/* ── ASCII koi background (procedural, behind all content) ── */
+#koi-bg {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;              /* sobre el papel de <html>, bajo el contenido */
+  pointer-events: none;
+  opacity: .8;              /* ambiente, pero legible */
+}
+
+/* ── ASCII banner (pandora.jpg → ASCII azul) sobre el hero ── */
+#ascii-banner {
+  position: relative;
+  width: 100%;
+  height: clamp(180px, 30vh, 300px);
+  background:
+    radial-gradient(130% 150% at 50% 0%, #ffffff 0%, #f1f4fd 70%, #e8ecfa 100%);
+  border-bottom: 1px solid var(--divider);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#ascii-banner .ascii-canvas { display: block; }
+/* si pandora.jpg no carga (o file://), colapsa el banner sin romper el layout */
+#ascii-banner.ascii-fail { display: none; }
+
+@media (hover: none) { #koi-bg { display: none; } }
+@media (prefers-reduced-motion: reduce) { #koi-bg { display: none; } }
 
 /* ── header ── */
 .hdr {
@@ -706,6 +744,76 @@ input[type="color"] { padding: 3px; height: 38px; cursor: pointer; }
 
 .empty-msg { padding: 24px; color: var(--muted); font-size: .88rem; }
 
+/* ── babilonia garden ── */
+.garden {
+  background: var(--surface);
+  border: 1px solid var(--bevel-dk);
+  border-top-color: var(--bevel-lt);
+  border-left-color: var(--bevel-lt);
+  border-radius: var(--radius);
+  box-shadow: inset -1px -1px 0 var(--bevel-dk), inset 1px 1px 0 var(--bevel-lt);
+  overflow: hidden;
+}
+
+.seed-form {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--divider);
+  background: var(--title-bar);
+  flex-wrap: wrap;
+}
+.seed-form input { flex: 1; min-width: 180px; }
+
+.garden-plot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 20px 26px;
+  padding: 30px 24px 18px;
+  min-height: 180px;
+  /* "tierra": una banda terrosa al pie del cantero */
+  background:
+    linear-gradient(to bottom, transparent 0, transparent calc(100% - 26px),
+      rgba(120, 92, 60, .12) calc(100% - 26px), rgba(120, 92, 60, .12) 100%);
+  border-bottom: 2px solid #b9a07f;
+}
+
+.flower {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: var(--cur-hand);
+  transition: transform .15s;
+}
+.flower:hover { transform: translateY(-3px); }
+
+.fl-art {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: .58rem;
+  line-height: 1.05;
+  letter-spacing: 0;
+  white-space: pre;
+  text-align: center;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .5);
+  transition: filter .15s;
+}
+.flower:hover .fl-art { filter: brightness(1.12) saturate(1.1); }
+
+.fl-seed {
+  margin-top: 6px;
+  max-width: 96px;
+  font-family: var(--mono);
+  font-size: .58rem;
+  letter-spacing: .02em;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ══ POINTER FX (halftone spotlight + eased follower) ══ */
 /* full-screen canvas that draws halftone dots around the cursor */
 #fx-halftone {
@@ -786,88 +894,8 @@ body.fx-dark #fx-toggle {
 }
 @media (hover: none) { #fx-halftone, #cursor-ring, #fx-rings, #fx-stage, #fx-toggle { display: none; } }
 
-/* ══ RETRO "PLAYER" STATUS WIDGET (bottom-left) ══ */
-.player {
-  position: fixed;
-  left: 20px;
-  bottom: 20px;
-  z-index: 40;
-  width: 230px;
-  background: var(--surface);
-  border: 1px solid var(--bevel-dk);
-  border-top-color: var(--bevel-lt);
-  border-left-color: var(--bevel-lt);
-  border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(0,0,0,.14),
-              inset -1px -1px 0 var(--bevel-dk), inset 1px 1px 0 var(--bevel-lt);
-  font-family: var(--mono);
-  overflow: hidden;
-  user-select: none;
-}
-.player-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
-  background: var(--title-bar);
-  border-bottom: 1px solid var(--divider);
-  font-size: .64rem;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--text);
-}
-.player-bar .dot {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: var(--muted); opacity: .5;
-  box-shadow: 10px 0 0 var(--muted);
-}
-.player-bar .title { margin-left: auto; opacity: .7; }
-.player-body {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px;
-}
-.player-thumb {
-  width: 46px; height: 46px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--bevel-dk);
-  border-top-color: var(--bevel-dk);
-  border-left-color: var(--bevel-dk);
-  background: #1c1c1a;
-  box-shadow: inset 1px 1px 2px rgba(0,0,0,.6);
-  border-radius: 3px;
-}
-/* animated LED equalizer bars */
-.player-eq { display: flex; align-items: flex-end; gap: 3px; height: 30px; }
-.player-eq i {
-  width: 4px;
-  background: var(--blue);
-  opacity: .8;
-  animation: eq 900ms ease-in-out infinite;
-}
-.player-eq i:nth-child(2) { animation-delay: .15s; }
-.player-eq i:nth-child(3) { animation-delay: .30s; }
-.player-eq i:nth-child(4) { animation-delay: .45s; }
-.player-eq i:nth-child(5) { animation-delay: .60s; }
-@keyframes eq { 0%,100% { height: 20%; } 50% { height: 100%; } }
-.player-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.player-meta .lbl { font-size: .58rem; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
-.player-meta .val {
-  font-family: var(--serif);
-  font-size: .95rem;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* ── responsive ── */
 @media (max-width: 720px) {
-  .player { display: none; }
   .hdr { padding: 0 20px; }
   .logo { font-size: 2rem; }
   .side-nav { right: 16px; top: auto; bottom: 24px; transform: none; }

@@ -5,8 +5,10 @@
      (hero, galería, lightbox) → se dibuja cada escena en un
      sub-viewport y se hace blit a un <canvas> 2D de cada vista.
      Esto rinde N tarjetas con un único contexto GPU.
-   · Cada atractor es una polilínea (THREE.Line) con un shader
-     de "flujo cometa": estructura tenue + cabezales brillantes.
+   · Cada atractor es una nube de PARTÍCULAS (THREE.Points): cada
+     vértice de la trayectoria es un punto con un shader de "flujo
+     cometa" (estructura tenue + cabezales brillantes) y un
+     dithering ordenado que le da grano semitono.
    · Estética "etérea", dos variantes intercambiables en vivo
      (ver AESTHETIC / setAestheticMode):
        - "nebulosa": fondo casi negro, el blit se repite borroso
@@ -154,13 +156,21 @@ function setAestheticMode(m) {
   if (btn) btn.textContent = AESTHETIC_MODE === "nebulosa" ? "✦ bruma" : "✦ nebulosa";
 }
 
-/* Shader del "flujo cometa" — trazo azul sobre blanco, blending normal ── */
+/* Shader del "flujo cometa" por PARTÍCULAS — cada vértice de la
+   trayectoria se dibuja como un punto (gl_Points) en vez de una
+   polilínea continua. Mismo revelado progresivo + cabezas cometa,
+   pero ahora con un dithering ordenado (ruido de gradiente
+   interleaved) que cuantiza el alfa en escalones → grano tipo
+   semitono sobre cada partícula. ── */
 const COMET_VERT = `
   attribute float aProg;
+  uniform float uSize;
   varying float vProg;
   void main() {
     vProg = aProg;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mv;
+    gl_PointSize = uSize * (3.2 / -mv.z);   // atenúa suave con la profundidad
   }
 `;
 const COMET_FRAG = `
@@ -174,17 +184,32 @@ const COMET_FRAG = `
   varying float vProg;
   void main() {
     if (vProg > uReveal) discard;
-    float a = uBase;                       // estructura tenue ya revelada
+    vec2 pc = gl_PointCoord - 0.5;          // disco suave por partícula
+    float rr = dot(pc, pc);
+    if (rr > 0.25) discard;
+    float soft = smoothstep(0.25, 0.02, rr);
+
+    float a = uBase;                        // estructura tenue ya revelada
     for (int k = 0; k < 4; k++) {
       if (k >= uHeadCount) break;
       float d = uHeads[k] - vProg;
-      if (d < 0.0) d += uReveal;           // envolver dentro de lo revelado
+      if (d < 0.0) d += uReveal;            // envolver dentro de lo revelado
       if (d < uTrail) {
-        float f = 1.0 - d / uTrail;        // 0 cola → 1 cabeza
+        float f = 1.0 - d / uTrail;         // 0 cola → 1 cabeza
         float trailA = mix(0.16, 1.0, f);
         a = max(a, trailA);
       }
     }
+    a *= soft;
+
+    // dithering ordenado: cuantiza el alfa en escalones con un umbral
+    // de ruido de gradiente → grano semitono estable (no parpadea)
+    float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy,
+                      vec2(0.06711056, 0.00583715))));
+    float levels = 6.0;
+    a = floor(a * levels + ign) / levels;
+    if (a <= 0.0) discard;
+
     gl_FragColor = vec4(uColor, clamp(a, 0.0, 1.0));
   }
 `;
@@ -246,6 +271,7 @@ function makeAttractorScene(def, N, opts) {
       uReveal:    { value: 0.0 },
       uTrail:     { value: opts.trail },
       uBase:      { value: opts.base },
+      uSize:      { value: opts.size || 2.6 },
       uHeads:     { value: [0,0,0,0] },
       uHeadCount: { value: opts.heads }
     },
@@ -257,9 +283,9 @@ function makeAttractorScene(def, N, opts) {
     depthWrite: false
   });
 
-  const line = new THREE.Line(geo, mat);
+  const points = new THREE.Points(geo, mat);
   const group = new THREE.Group();
-  group.add(line);
+  group.add(points);
   group.rotation.x = opts.tiltX || 0.3;
 
   const scene = new THREE.Scene();
@@ -377,7 +403,7 @@ function makeHero(holder) {
   cv.className = "gl-canvas";
   holder.appendChild(cv);
   const view = createView(cv, { name:"Lorenz", color:"#243ec4", dt:0.006, _lorenz:true, init:[0.1,0,0] },
-    32000, { trail: 0.06, base: 0.13, heads: 3, tiltX: 0.28, growth: 0.006, spin: 0.0032 });
+    32000, { trail: 0.06, base: 0.13, heads: 3, size: 3.0, tiltX: 0.28, growth: 0.006, spin: 0.0032 });
   if (view) { view.active = true; attachDrag(view); }
 }
 
@@ -396,7 +422,7 @@ function openLightbox(def) {
 
   const speedEl = document.getElementById("lb-speed");
   lightboxView = createView(cv, def, 60000,
-    { trail: 0.05, base: 0.13, heads: 3, tiltX: 0.3, spin: 0.003, speedEl });
+    { trail: 0.05, base: 0.13, heads: 3, size: 3.0, tiltX: 0.3, spin: 0.003, speedEl });
   if (lightboxView) { lightboxView.active = true; attachDrag(lightboxView); }
 }
 
@@ -470,7 +496,7 @@ function makeCard(def, isUser) {
   document.getElementById("gallery").appendChild(card);
 
   const view = createView(cv, def, 16000,
-    { trail: 0.05, base: 0.13, heads: 2, tiltX: 0.3, growth: 0.008, spin: 0.005 });
+    { trail: 0.05, base: 0.13, heads: 2, size: 2.4, tiltX: 0.3, growth: 0.008, spin: 0.005 });
   if (view) {
     cardViews.set(wrap, view);
     io.observe(wrap);

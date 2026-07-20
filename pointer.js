@@ -40,10 +40,10 @@
   let radius = 120, radiusTo = 120, seen = false;
   ring.style.opacity = "0";
 
-  const GRID = 13, DOT = 3.4, INK = "36,62,196";
+  const GRID = 12, DOT = 4.0, INK = "36,62,196";
   const HOT_SEL =
     "a,button,.nav-item,.card-wrap,.card-btn,.copy-btn,.lb-btn," +
-    ".lb-close,input,textarea,summary,[role=button],.player";
+    ".lb-close,input,textarea,summary,[role=button]";
 
   addEventListener("pointermove", (e) => {
     target.x = e.clientX; target.y = e.clientY;
@@ -57,7 +57,14 @@
   addEventListener("pointerup",   () => { radiusTo = ring.classList.contains("hot") ? 165 : 120; });
   addEventListener("pointerleave", () => { seen = false; });
 
+  /* Un ÚNICO bucle persistente: siempre re-agenda. Sólo dibuja la
+     rejilla de tinta cuando el modo activo es "tinta"; en "ondas"
+     limpia y no-opera. Así alternar de modo nunca deja el bucle
+     muerto (era la causa de que la tinta "no volviera"). */
   function frameHalftone() {
+    requestAnimationFrame(frameHalftone);
+    if (mode !== "tinta") return;
+
     ease.x += (target.x - ease.x) * 0.2;
     ease.y += (target.y - ease.y) * 0.2;
     ring.style.transform = "translate(" + ease.x + "px," + ease.y + "px)";
@@ -77,12 +84,11 @@
           const t = 1 - Math.sqrt(d2) / R;
           const r = DOT * t;
           if (r < 0.35) continue;
-          ctx.fillStyle = "rgba(" + INK + "," + (0.16 + 0.5 * t).toFixed(3) + ")";
+          ctx.fillStyle = "rgba(" + INK + "," + (0.2 + 0.55 * t).toFixed(3) + ")";
           ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
         }
       }
     }
-    if (mode === "tinta") requestAnimationFrame(frameHalftone);
   }
 
   /* ══ coordinador de modo ══ */
@@ -102,7 +108,7 @@
       if (window.PandoraRings && ringsCv) window.PandoraRings.start(ringsCv);
     } else {
       if (window.PandoraRings) window.PandoraRings.stop();
-      requestAnimationFrame(frameHalftone);
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
     }
   }
   function toggleMode() { mode = mode === "tinta" ? "ondas" : "tinta"; applyMode(); }
@@ -112,24 +118,5 @@
     if (e.key === "Escape" && mode === "ondas") { mode = "tinta"; applyMode(); }
   });
   applyMode();
-
-  /* ── cablear el widget "player" a la sección/atractor actual ── */
-  const val = document.getElementById("player-val");
-  const sub = document.getElementById("player-sub");
-  function setPlayer(name, tag) {
-    if (val && name) val.textContent = name;
-    if (sub && tag)  sub.textContent = tag;
-  }
-  document.querySelectorAll(".nav-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const label = (btn.textContent || "").replace(/[◄►]/g, "").trim();
-      setPlayer(label, btn.dataset.sec === "poemas" ? "papel & tinta" : "Lorenz");
-    });
-  });
-  document.addEventListener("click", (e) => {
-    const card = e.target.closest && e.target.closest(".card");
-    if (!card) return;
-    const nm = card.querySelector(".card-name");
-    if (nm) setPlayer("creative coding", nm.textContent.trim());
-  });
+  requestAnimationFrame(frameHalftone);   // bucle persistente único
 })();
