@@ -150,9 +150,13 @@
 
   function resize() {
     if (!renderer) return;
-    w = Math.max(1, canvas.clientWidth || innerWidth);
-    h = Math.max(1, canvas.clientHeight || innerHeight);
-    renderer.setSize(w, h, false);
+    // El <canvas> es un elemento REEMPLAZADO: con width/height auto no se
+    // estira a `inset:0`, conserva su tamaño intrínseco (300×150) y su
+    // clientWidth miente. Medimos el viewport y dejamos que three fije el
+    // estilo CSS (updateStyle = true) para que el canvas llene la pantalla.
+    w = Math.max(1, innerWidth);
+    h = Math.max(1, innerHeight);
+    renderer.setSize(w, h, true);
 
     const sw = Math.max(1, Math.round(w * RES)),  sh = Math.max(1, Math.round(h * RES));
     const bw = Math.max(1, Math.round(w * BLUR_RES)), bh = Math.max(1, Math.round(h * BLUR_RES));

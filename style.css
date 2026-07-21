@@ -116,6 +116,8 @@ body::after {
 
 @media (hover: none) { #koi-bg { display: none; } }
 @media (prefers-reduced-motion: reduce) { #koi-bg { display: none; } }
+/* en el jardín de babilonia no nadan los peces */
+body.in-garden #koi-bg { display: none; }
 
 /* ── header ── */
 .hdr {
@@ -745,74 +747,101 @@ input[type="color"] { padding: 3px; height: 38px; cursor: pointer; }
 .empty-msg { padding: 24px; color: var(--muted); font-size: .88rem; }
 
 /* ── babilonia garden ── */
+/* ya no es una tarjeta: la pradera respira a lo ancho de la sección */
 .garden {
-  background: var(--surface);
-  border: 1px solid var(--bevel-dk);
-  border-top-color: var(--bevel-lt);
-  border-left-color: var(--bevel-lt);
-  border-radius: var(--radius);
-  box-shadow: inset -1px -1px 0 var(--bevel-dk), inset 1px 1px 0 var(--bevel-lt);
-  overflow: hidden;
+  background: none;
+  border: 0;
+  box-shadow: none;
+  overflow: visible;
 }
 
 .seed-form {
   display: flex;
   gap: 10px;
   align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--divider);
-  background: var(--title-bar);
+  margin-bottom: 22px;
   flex-wrap: wrap;
 }
 .seed-form input { flex: 1; min-width: 180px; }
 
-.garden-plot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 20px 26px;
-  padding: 30px 24px 18px;
-  min-height: 180px;
-  /* "tierra": una banda terrosa al pie del cantero */
-  background:
-    linear-gradient(to bottom, transparent 0, transparent calc(100% - 26px),
-      rgba(120, 92, 60, .12) calc(100% - 26px), rgba(120, 92, 60, .12) 100%);
-  border-bottom: 2px solid #b9a07f;
-}
-
-.flower {
-  display: flex;
-  flex-direction: column;
+/* controles de vista de la pradera: zoom + toggle de nombres */
+.garden-controls {
+  display: inline-flex;
+  gap: 6px;
   align-items: center;
-  cursor: var(--cur-hand);
-  transition: transform .15s;
+  margin-left: auto;
 }
-.flower:hover { transform: translateY(-3px); }
-
-.fl-art {
-  margin: 0;
+.gc-btn {
+  min-width: 30px;
+  padding: 5px 10px;
   font-family: var(--mono);
-  font-size: .58rem;
-  line-height: 1.05;
-  letter-spacing: 0;
-  white-space: pre;
-  text-align: center;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, .5);
-  transition: filter .15s;
+  font-size: .72rem;
+  line-height: 1;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--bevel-dk);
+  border-top-color: var(--bevel-lt);
+  border-left-color: var(--bevel-lt);
+  border-radius: 5px;
+  cursor: var(--cur-hand, pointer);
+  transition: filter .12s, color .12s;
 }
-.flower:hover .fl-art { filter: brightness(1.12) saturate(1.1); }
+.gc-btn:hover { filter: brightness(1.05); color: var(--ink, inherit); }
+.gc-btn:active { filter: brightness(.94); }
+.gc-toggle.on { color: var(--accent, #243ec4); border-color: var(--accent, #243ec4); }
 
-.fl-seed {
-  margin-top: 6px;
-  max-width: 96px;
+/* la pradera: contenedor a todo lo ancho para el único canvas 3D */
+.garden-plot {
+  width: 100%;
+  min-height: 200px;
+}
+
+/* capa de escena: el canvas + las etiquetas flotantes de cada semilla */
+.garden-scene {
+  position: relative;
+  margin: 0 auto;
+}
+
+.garden-canvas {
+  display: block;
+  cursor: grab;
+  touch-action: none;              /* el arrastre gira la cámara, no hace scroll */
+  /* pradera 3D tramada: escalada con pixelado nítido para que el
+     dithering se lea como puntos, no como imagen suavizada */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(0 6px 5px rgba(60, 46, 30, .22));
+}
+.garden-canvas:active { cursor: grabbing; }
+
+.garden-hint {
+  margin: 12px 2px 0;
   font-family: var(--mono);
-  font-size: .58rem;
+  font-size: .62rem;
   letter-spacing: .02em;
   color: var(--muted);
+  opacity: .8;
+}
+
+/* etiqueta de semilla proyectada bajo su flor */
+.garden-label {
+  position: absolute;
+  transform: translate(-50%, 4px);
+  padding: 1px 5px;
+  font-family: var(--mono);
+  font-size: .56rem;
+  letter-spacing: .02em;
+  color: var(--muted);
+  background: rgba(244, 241, 232, .62);
+  border-radius: 3px;
   white-space: nowrap;
+  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
+  pointer-events: none;
 }
+/* toggle de nombres: ocultar todas las etiquetas de golpe */
+.garden-scene.labels-hidden .garden-label { display: none; }
 
 /* ══ POINTER FX (halftone spotlight + eased follower) ══ */
 /* full-screen canvas that draws halftone dots around the cursor */

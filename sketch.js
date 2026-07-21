@@ -509,6 +509,8 @@ function showSection(sec) {
   document.querySelectorAll(".sec").forEach(s => s.classList.remove("active"));
   document.getElementById("sec-" + sec).classList.add("active");
   document.getElementById("hero").style.display = (sec === "cc") ? "block" : "none";
+  // en babilonia garden los koi de fondo no deben aparecer
+  document.body.classList.toggle("in-garden", sec === "babilonia");
 }
 
 /* ── edición ── */

@@ -114,7 +114,6 @@
   function toggleMode() { mode = mode === "tinta" ? "ondas" : "tinta"; applyMode(); }
   if (toggle) toggle.addEventListener("click", toggleMode);
   addEventListener("keydown", (e) => {
-    if ((e.key === "d" || e.key === "D") && !/input|textarea/i.test(e.target.tagName)) toggleMode();
     if (e.key === "Escape" && mode === "ondas") { mode = "tinta"; applyMode(); }
   });
   applyMode();

@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Pandora</title>
-<link rel="stylesheet" href="style.css?v=18" />
+<link rel="stylesheet" href="style.css?v=22" />
 </head>
 <body>
 
@@ -121,8 +121,14 @@
         <input name="seed" placeholder="escribe una semilla… (p. ej. «luz de junio»)" required />
         <button class="btn-solid" type="submit">plantar ✿</button>
         <button class="btn-ghost" type="button" id="garden-clear">vaciar</button>
+        <span class="garden-controls">
+          <button class="gc-btn" type="button" id="garden-zoom-out" title="alejar">−</button>
+          <button class="gc-btn" type="button" id="garden-zoom-in" title="acercar">+</button>
+          <button class="gc-btn gc-toggle" type="button" id="garden-names" aria-pressed="true" title="mostrar / ocultar nombres">◉ nombres</button>
+        </span>
       </form>
       <div id="garden-plot" class="garden-plot"></div>
+      <p class="garden-hint">arrastra para girar · rueda o +/− para acercar · WASD / flechas para moverte · toca una flor para arrancarla</p>
     </div>
   </section>
 
@@ -152,13 +158,13 @@
 <canvas id="fx-rings"></canvas>
 <canvas id="fx-halftone"></canvas>
 <div id="cursor-ring"></div>
-<button id="fx-toggle" title="alternar efecto de puntero (tecla D)">✦ ondas</button>
+<button id="fx-toggle" title="alternar efecto de puntero">✦ ondas</button>
 
 <script src="three.min.js"></script>
 <script src="sketch.js?v=14"></script>
-<script src="pointer-rings.js?v=1"></script>
-<script src="pointer.js?v=7"></script>
+<script src="pointer-rings.js?v=2"></script>
+<script src="pointer.js?v=8"></script>
 <script src="ascii.js?v=8"></script>
-<script src="garden.js?v=2"></script>
+<script src="garden.js?v=7"></script>
 </body>
 </html>
