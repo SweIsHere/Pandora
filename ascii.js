@@ -101,7 +101,7 @@
         buf[p] = Math.pow(Math.max(0, 1 - lum), 0.85);   // gamma → sombreado en la cara
       }
 
-      ctx.fillStyle = "#2440c8";               // tinta azul
+      ctx.fillStyle = "#1c3ef0";               // tinta azul (más intensa)
       for (let y = 0; y < rows; y++) {
         for (let x = 0; x < cols; x++) {
           const p = y * cols + x;

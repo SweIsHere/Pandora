@@ -45,7 +45,8 @@
       "Bash(curl -sI http://localhost:8791/index.html)",
       "Bash(rm -f index.html.bak_marker)",
       "Bash(jobs -l)",
-      "Bash(curl -sf http://localhost:8793/index.html -o /dev/null)"
+      "Bash(curl -sf http://localhost:8793/index.html -o /dev/null)",
+      "PowerShell(Select-String -Path .\\\\sketch.js -Pattern \"poem\" | Select-Object -First 20 | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })"
     ]
   }
 }

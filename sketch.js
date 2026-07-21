@@ -645,34 +645,126 @@ window.addEventListener("DOMContentLoaded", () => {
       date: new Date().toLocaleDateString("es", {year:"numeric",month:"long",day:"numeric"})
     };
     const all = loadPoems(); all.unshift(poem); savePoems(all);
-    renderPoems(); pf.reset();
+    renderPoems(); pf.reset(); updatePoemCount();
   });
+
+  // contador en vivo de versos/palabras bajo la hoja en blanco
+  const pfBody = pf.querySelector('[name="body"]');
+  function updatePoemCount() {
+    const cnt = document.getElementById("pf-count");
+    if (!cnt) return;
+    const v = pfBody.value;
+    if (!v.trim()) { cnt.textContent = ""; return; }
+    const verses = v.split("\n").filter(l => l.trim()).length;
+    const words  = (v.match(/\S+/g) || []).length;
+    cnt.textContent = verses + " v · " + words + " p";
+  }
+  pfBody.addEventListener("input", updatePoemCount);
+
+  // lector de poemas: clic completa el tecleo; fondo o ESC cierran
+  const pr = document.getElementById("poem-reader");
+  pr.addEventListener("click", e => {
+    if (document.getElementById("pr-body").classList.contains("typing")) { finishPoemTyping(); return; }
+    if (e.target === pr) closePoemReader();
+  });
+  document.getElementById("pr-close").addEventListener("click", e => {
+    e.stopPropagation();
+    closePoemReader();
+  });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closePoemReader(); });
 
   renderPoems();
 });
+
+/* ── poemas: hojas sueltas + lector máquina de escribir ── */
+const POEM_GLYPHS = ["✿","❀","✾","❁","✽","✻","·","~","✳"];
+function poemHash(s){
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+/* pequeño ornamento tipográfico determinista: cada poema tiene el suyo */
+function poemOrnament(text){
+  const h = poemHash(text);
+  const n = 3 + (h % 4);
+  let out = [];
+  for (let i = 0; i < n; i++) out.push(POEM_GLYPHS[(h >>> (i * 3)) % POEM_GLYPHS.length]);
+  return out.join(" ");
+}
 
 function renderPoems() {
   const list = document.getElementById("poems-list");
   const poems = loadPoems();
   list.innerHTML = "";
   if (!poems.length) {
-    list.innerHTML = '<p class="empty-msg">el primero te espera al lado.</p>';
+    list.innerHTML =
+      '<div class="poems-empty"><pre class="pe-art">' +
+      '   .--.\n  ( ✿  )\n   `--´\n    |\n   \\|/</pre>' +
+      '<p>el escritorio está vacío — el primer poema te espera al lado.</p></div>';
     return;
   }
   poems.forEach(pm => {
     const el = document.createElement("article");
     el.className = "poem-item";
+    el.style.setProperty("--tilt", (((poemHash(pm.id) % 9) - 4) * 0.55) + "deg");
+    const verses = pm.body.split("\n").filter(l => l.trim()).length;
+    const words  = (pm.body.match(/\S+/g) || []).length;
     el.innerHTML =
-      '<div class="poem-item-top"><h4></h4><button class="poem-del">borrar</button></div>'+
-      '<div class="poem-date"></div><div class="poem-body"></div>';
-    el.querySelector("h4").textContent        = pm.title;
+      '<div class="poem-orn"></div><h4></h4><div class="poem-date"></div>' +
+      '<div class="poem-body"></div>' +
+      '<div class="poem-foot"><span class="poem-meta"></span><button class="poem-del">borrar</button></div>';
+    el.querySelector(".poem-orn").textContent  = poemOrnament(pm.title + pm.body);
+    el.querySelector("h4").textContent         = pm.title;
     el.querySelector(".poem-date").textContent = pm.date;
     el.querySelector(".poem-body").textContent = pm.body;
-    el.querySelector(".poem-del").addEventListener("click", () => {
+    el.querySelector(".poem-meta").textContent =
+      verses + (verses === 1 ? " verso" : " versos") + " · " +
+      words  + (words  === 1 ? " palabra" : " palabras");
+    el.title = "leer «" + pm.title + "»";
+    el.addEventListener("click", () => openPoemReader(pm));
+    el.querySelector(".poem-del").addEventListener("click", (e) => {
+      e.stopPropagation();
       if (!confirm("¿Borrar este poema?")) return;
       savePoems(loadPoems().filter(x => x.id !== pm.id));
       renderPoems();
     });
     list.appendChild(el);
   });
+}
+
+/* lector: teclea el poema carácter a carácter, como recién escrito */
+let prTimer = null, prFull = "";
+function openPoemReader(pm) {
+  const box  = document.getElementById("poem-reader");
+  const body = document.getElementById("pr-body");
+  document.getElementById("pr-ornament").textContent = poemOrnament(pm.title + pm.body);
+  document.getElementById("pr-title").textContent = pm.title;
+  document.getElementById("pr-date").textContent  = pm.date;
+  box.classList.add("open");
+  box.scrollTop = 0;
+  clearInterval(prTimer);
+  prFull = pm.body;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    body.textContent = prFull;
+    body.classList.remove("typing");
+    return;
+  }
+  body.textContent = "";
+  body.classList.add("typing");
+  let i = 0;
+  prTimer = setInterval(() => {
+    i++;
+    body.textContent = prFull.slice(0, i);
+    if (i >= prFull.length) { clearInterval(prTimer); body.classList.remove("typing"); }
+  }, 32);
+}
+function finishPoemTyping() {
+  clearInterval(prTimer);
+  const body = document.getElementById("pr-body");
+  body.textContent = prFull;
+  body.classList.remove("typing");
+}
+function closePoemReader() {
+  clearInterval(prTimer);
+  document.getElementById("poem-reader").classList.remove("open");
 }

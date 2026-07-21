@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Pandora</title>
-<link rel="stylesheet" href="style.css?v=22" />
+<link rel="stylesheet" href="style.css?v=24" />
 </head>
 <body>
 
@@ -20,13 +20,13 @@
 <!-- side navigation (right-fixed, reference style) -->
 <nav class="side-nav">
   <button class="nav-item active" data-sec="cc">
-    creative coding<span class="nav-ind">◄</span>
+    <span class="nav-num">01</span>creative coding<span class="nav-ind">◄</span>
   </button>
   <button class="nav-item" data-sec="poemas">
-    poemas<span class="nav-ind">◄</span>
+    <span class="nav-num">02</span>poemas<span class="nav-ind">◄</span>
   </button>
   <button class="nav-item" data-sec="babilonia">
-    babilonia garden<span class="nav-ind">◄</span>
+    <span class="nav-num">03</span>babilonia garden<span class="nav-ind">◄</span>
   </button>
 </nav>
 
@@ -46,6 +46,11 @@
     <div id="hero-holder"></div>
     <div class="drag-hint">arrastra para rotar</div>
   </div>
+  <div class="hero-caption" aria-hidden="true">
+    <div class="hc-line">la caja de</div>
+    <div class="hc-big">Pandora</div>
+    <div class="hc-mono">/\-_=+|&lt; caos · verso · flor -/= ~:*-/</div>
+  </div>
 </div>
 
 <!-- ═══ SECTIONS ═══ -->
@@ -54,6 +59,7 @@
   <!-- creative coding -->
   <section id="sec-cc" class="sec active">
     <div class="sec-head">
+      <span class="sec-kicker">01 — sistemas dinámicos</span>
       <h2 class="sec-title">creative coding</h2>
       <p class="sec-hint">Atractores extraños — sube el tuyo</p>
     </div>
@@ -98,13 +104,19 @@
   <!-- poemas -->
   <section id="sec-poemas" class="sec">
     <div class="sec-head">
+      <span class="sec-kicker">02 — palabra</span>
       <h2 class="sec-title">poemas</h2>
+      <p class="sec-hint">hojas sueltas sobre el escritorio — toca una para leerla en calma</p>
     </div>
-    <div class="poem-grid">
+    <div class="poem-desk">
       <form id="poem-form" class="poem-form-wrap" autocomplete="off">
+        <div class="pf-label">─── ✎ hoja en blanco ───</div>
         <input name="title" placeholder="título" />
         <textarea name="body" placeholder="escribe aquí…" required></textarea>
-        <button class="btn-solid" type="submit">guardar</button>
+        <div class="pf-foot">
+          <span class="pf-count" id="pf-count"></span>
+          <button class="btn-solid" type="submit">guardar ✿</button>
+        </div>
       </form>
       <div id="poems-list" class="poems-list"></div>
     </div>
@@ -113,6 +125,7 @@
   <!-- babilonia garden -->
   <section id="sec-babilonia" class="sec">
     <div class="sec-head">
+      <span class="sec-kicker">03 — jardín</span>
       <h2 class="sec-title">Babilonia Garden</h2>
       <p class="sec-hint">Planta una semilla — el texto define la flor</p>
     </div>
@@ -132,6 +145,27 @@
     </div>
   </section>
 
+</div>
+
+<!-- ═══ FOOTER ═══ -->
+<footer class="ftr">
+  <div class="ftr-ascii">/\-_=+|&lt;  ·  ✿  ·  &gt;|+=_-\/</div>
+  <div class="ftr-line">
+    <span>Pandora — atractores extraños</span>
+    <span>hecho a mano · 2026</span>
+  </div>
+</footer>
+
+<!-- ═══ POEM READER (máquina de escribir) ═══ -->
+<div id="poem-reader">
+  <div class="pr-inner">
+    <button id="pr-close" class="lb-close">×</button>
+    <div class="pr-ornament" id="pr-ornament"></div>
+    <h3 id="pr-title"></h3>
+    <div class="pr-date" id="pr-date"></div>
+    <div class="pr-body" id="pr-body"></div>
+    <div class="pr-hint">clic para completar · ESC para volver</div>
+  </div>
 </div>
 
 <!-- ═══ LIGHTBOX ═══ -->
@@ -155,16 +189,18 @@
 
 <!-- ═══ POINTER FX ═══ -->
 <div id="fx-stage"></div>
+<canvas id="fx-life" aria-hidden="true"></canvas>
 <canvas id="fx-rings"></canvas>
 <canvas id="fx-halftone"></canvas>
 <div id="cursor-ring"></div>
 <button id="fx-toggle" title="alternar efecto de puntero">✦ ondas</button>
 
 <script src="three.min.js"></script>
-<script src="sketch.js?v=14"></script>
+<script src="sketch.js?v=15"></script>
 <script src="pointer-rings.js?v=2"></script>
-<script src="pointer.js?v=8"></script>
-<script src="ascii.js?v=8"></script>
-<script src="garden.js?v=7"></script>
+<script src="ondas-life.js?v=1"></script>
+<script src="pointer.js?v=9"></script>
+<script src="ascii.js?v=9"></script>
+<script src="garden.js?v=9"></script>
 </body>
 </html>

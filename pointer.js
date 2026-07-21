@@ -106,8 +106,10 @@
 
     if (ondas) {
       if (window.PandoraRings && ringsCv) window.PandoraRings.start(ringsCv);
+      if (window.PandoraLife) window.PandoraLife.start();
     } else {
       if (window.PandoraRings) window.PandoraRings.stop();
+      if (window.PandoraLife) window.PandoraLife.stop();
       ctx.clearRect(0, 0, innerWidth, innerHeight);
     }
   }

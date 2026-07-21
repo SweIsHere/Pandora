@@ -57,9 +57,12 @@
   const BLOOMS  = [
     "#c0392b", "#d35400", "#e67e22", "#f1c40f", "#8e44ad",
     "#9b2d86", "#c2417a", "#2980b9", "#16a085", "#e84393",
-    "#6c5ce7", "#243ec4", "#d81b60"
+    "#6c5ce7", "#243ec4", "#d81b60", "#ff7675", "#fd79a8",
+    "#fdcb6e", "#00b894", "#0984e3", "#a29bfe", "#e17055",
+    "#ff5e78", "#7ed6df", "#f78fb3", "#c56cf0", "#ffb8b8",
+    "#f5f0e1", "#ffd32a", "#40739e", "#e84118", "#9c88ff"
   ];
-  const STEMCOLS = ["#3a7d34", "#2e7d32", "#4c9a2a", "#5a8f29"];
+  const STEMCOLS = ["#3a7d34", "#2e7d32", "#4c9a2a", "#5a8f29", "#6b8e23", "#3d6b35", "#2f6b4f", "#54792f"];
 
   /* paletas propias por especie: algunas flores tienen un color
      "real" reconocible (gardenia blanca, buganvilla magenta…) así
@@ -70,6 +73,72 @@
   const LILY_COLORS      = ["#ffffff", "#ffcc80", "#f48fb1", "#fff3e0", "#ffe0b2"];
   const LOTV_COLORS      = ["#ffffff", "#f7f5e6"];
   const BOUGAIN_COLORS   = ["#c2185b", "#8e24aa", "#ff6f00", "#e91e63", "#ad1457", "#6a1b9a"];
+  const POPPY_COLORS     = ["#e74c3c", "#ff6b4a", "#d63031", "#ff7f50", "#f95d6a", "#ff4757"];
+  const DAHLIA_COLORS    = ["#d81b60", "#f06292", "#ff7043", "#ffca28", "#ab47bc", "#ec407a", "#ef5350"];
+  const COSMOS_COLORS    = ["#f06292", "#f8bbd0", "#ffffff", "#e91e63", "#ba68c8", "#ce93d8"];
+  const ANEMONE_COLORS   = ["#ffffff", "#f48fb1", "#ce93d8", "#ef9a9a", "#b39ddb", "#f5f0fa"];
+  const HIBISCUS_COLORS  = ["#ff1744", "#ff5252", "#ff4081", "#ff6e40", "#f50057", "#ff8a65"];
+  const IRIS_COLORS      = ["#5c6bc0", "#7986cb", "#4527a0", "#9575cd", "#30336b", "#6c5ce7"];
+  const LAVENDER_COLORS  = ["#967bb6", "#8e7cc3", "#b39ddb", "#7e57c2", "#9575cd"];
+  const DANDELION_COLORS = ["#fdfdf5", "#fffef0", "#f5f2e3"];
+
+  /* ángulo áureo (Vogel/filotaxis): θ = n · 137.5° → el empaquetado
+     en espiral de los flósculos del disco (girasol, margarita…) */
+  const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+
+  /* evita colores OSCUROS en las flores: sube el brillo (L de HSL) a
+     un piso, conservando tono y saturación. Así ningún pétalo/centro
+     queda apagado, aun si la paleta trae un tono profundo. */
+  function brighten(hex, floorL) {
+    floorL = floorL == null ? 0.54 : floorL;
+    const v = parseInt(hex.slice(1), 16);
+    let r = ((v >> 16) & 255) / 255, g = ((v >> 8) & 255) / 255, b = (v & 255) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    let l = (max + min) / 2, s = 0, h = 0;
+    if (d > 1e-6) {
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = ((g - b) / d) % 6;
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h /= 6; if (h < 0) h += 1;
+    }
+    if (l >= floorL) return hex;
+    l = floorL;
+    if (s === 0) { const c = Math.round(l * 255); return "#" + ((1 << 24) + (c << 16) + (c << 8) + c).toString(16).slice(1); }
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
+    const hue = function (t) {
+      if (t < 0) t += 1; if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const to = function (x) { return Math.round(Math.min(1, Math.max(0, x)) * 255); };
+    return "#" + ((1 << 24) + (to(hue(h + 1 / 3)) << 16) + (to(hue(h)) << 8) + to(hue(h - 1 / 3))).toString(16).slice(1);
+  }
+
+  /* disco de flósculos en espiral filotáctica (modelo de Vogel): en
+     vez de una esfera lisa, el centro de las flores compuestas se
+     rellena con decenas de flósculos colocados en el ángulo áureo,
+     formando las dos familias de espirales (horaria/antihoraria) que
+     se ven en un girasol real. Abombado como una cúpula suave. */
+  function addFloretDisk(head, rnd, style, centerMat) {
+    const R = style.centerR;
+    const n = Math.round(26 + R * 165);
+    const c = R / Math.sqrt(n);                 // Vogel: r = c·√i
+    const dome = R * 0.55;
+    const fr = Math.max(0.011, R * 0.11);
+    const geo = new THREE.SphereGeometry(fr, 4, 3);
+    for (let i = 0; i < n; i++) {
+      const a = i * GOLDEN_ANGLE + (rnd() - 0.5) * 0.04;
+      const rr = c * Math.sqrt(i + 0.5);
+      const dy = dome * (1 - (rr / R) * (rr / R)) * 0.7;   // cúpula
+      const m = new THREE.Mesh(geo, centerMat);
+      m.position.set(Math.cos(a) * rr, Math.max(0, dy), Math.sin(a) * rr);
+      m.scale.setScalar(0.65 + (rr / R) * 0.6);            // menudos en el ojo, mayores al borde
+      head.add(m);
+    }
+  }
 
   /* recetas de cabeza: cuenta/apertura/radio de pétalos, tamaño de
      centro y anillos (una flor "single" apila 1-3 anillos de pétalos,
@@ -83,8 +152,8 @@
      (buganvilla) no usan estos campos: tienen su propio constructor
      porque su forma no es "una cabeza en la punta del tallo". */
   const STYLES = [
-    { name: "margarita", petalCount: [11, 15], openAngle: 0.10, ringRadius: 0.46, centerR: 0.15, petalLen: 0.50, petalW: 0.15, hang: false, rings: 1 },
-    { name: "girasol",   petalCount: [15, 20], openAngle: 0.18, ringRadius: 0.62, centerR: 0.32, petalLen: 0.70, petalW: 0.19, hang: false, rings: 1 },
+    { name: "margarita", petalCount: [11, 15], openAngle: 0.10, ringRadius: 0.46, centerR: 0.15, petalLen: 0.50, petalW: 0.15, hang: false, rings: 1, disk: true },
+    { name: "girasol",   petalCount: [15, 20], openAngle: 0.18, ringRadius: 0.62, centerR: 0.32, petalLen: 0.70, petalW: 0.19, hang: false, rings: 1, disk: true },
     { name: "tulipán",   petalCount: [5, 6],   openAngle: 1.10, ringRadius: 0.16, centerR: 0.05, petalLen: 0.56, petalW: 0.24, hang: false, rings: 1 },
     { name: "campana",   petalCount: [5, 6],   openAngle: 0.80, ringRadius: 0.20, centerR: 0.09, petalLen: 0.44, petalW: 0.22, hang: true,  rings: 1 },
     { name: "rosa",      petalCount: [7, 9],   openAngle: 0.60, ringRadius: 0.26, centerR: 0.07, petalLen: 0.40, petalW: 0.22, hang: false, rings: 2 },
@@ -92,6 +161,14 @@
     { name: "gardenia",  petalCount: [8, 11],  openAngle: 0.30, ringRadius: 0.20, centerR: 0.05, petalLen: 0.30, petalW: 0.19, hang: false, rings: 3, palette: GARDENIA_COLORS, centerHex: "#f5e59a" },
     { name: "orquídea",  petalCount: [5, 5],   openAngle: 0.35, ringRadius: 0.20, centerR: 0.05, petalLen: 0.34, petalW: 0.15, hang: false, rings: 1, lip: true, palette: ORCHID_COLORS },
     { name: "lirio",     petalCount: [6, 6],   openAngle: 0.95, ringRadius: 0.12, centerR: 0.05, petalLen: 0.60, petalW: 0.19, hang: false, rings: 1, stamens: true, palette: LILY_COLORS, centerHex: "#c0783c" },
+    { name: "amapola",   petalCount: [4, 6],   openAngle: 0.50, ringRadius: 0.18, centerR: 0.10, petalLen: 0.40, petalW: 0.34, hang: false, rings: 1, ruffle: true, palette: POPPY_COLORS, centerHex: "#26262b" },
+    { name: "dalia",     petalCount: [10, 13], openAngle: 0.50, ringRadius: 0.16, centerR: 0.06, petalLen: 0.34, petalW: 0.16, hang: false, rings: 3, ruffle: true, palette: DAHLIA_COLORS },
+    { name: "cosmos",    petalCount: [8, 9],   openAngle: 0.22, ringRadius: 0.40, centerR: 0.12, petalLen: 0.44, petalW: 0.20, hang: false, rings: 1, disk: true, palette: COSMOS_COLORS, centerHex: "#f1c40f" },
+    { name: "anémona",   petalCount: [6, 8],   openAngle: 0.28, ringRadius: 0.30, centerR: 0.13, petalLen: 0.40, petalW: 0.24, hang: false, rings: 1, disk: true, palette: ANEMONE_COLORS, centerHex: "#3a4a63" },
+    { name: "hibisco",   petalCount: [5, 5],   openAngle: 0.55, ringRadius: 0.20, centerR: 0.05, petalLen: 0.52, petalW: 0.36, hang: false, rings: 1, stamens: true, palette: HIBISCUS_COLORS, centerHex: "#ffd54f" },
+    { name: "iris",      petalCount: [3, 3],   openAngle: 0.25, ringRadius: 0.14, centerR: 0.05, petalLen: 0.44, petalW: 0.24, hang: false, rings: 2, droop: true, palette: IRIS_COLORS, centerHex: "#f1c40f" },
+    { name: "lavanda",         kind: "spike",   palette: LAVENDER_COLORS, centerHex: "#6d5aa8" },
+    { name: "diente de león",  kind: "puff",    palette: DANDELION_COLORS, centerHex: "#e8e4c9" },
     { name: "lirio de los valles", kind: "raceme",  palette: LOTV_COLORS, centerHex: "#eef0c2" },
     { name: "buganvilla",          kind: "cluster", palette: BOUGAIN_COLORS, centerHex: "#fff6c8" }
   ];
@@ -148,19 +225,21 @@
   }
 
   /* cabeza de pétalos apilados en 1-3 anillos (margarita … lirio) */
-  function addHead(root, rnd, style, bloomMat, centerMat, stemH) {
+  function addHead(root, rnd, style, matFor, centerMat, stemH) {
     const head = new THREE.Group();
     head.position.y = stemH;
     if (style.hang) head.rotation.x = Math.PI * 0.92;   // cuelga boca abajo (campana)
 
     head.add(new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.02, style.centerR), 8, 6), centerMat));
+    if (style.disk) addFloretDisk(head, rnd, style, centerMat);
 
     const rings = style.rings || 1;
     const twist = style.ruffle ? 0.5 : 0;
     for (let ring = 0; ring < rings; ring++) {
       const t      = rings > 1 ? ring / (rings - 1) : 0;   // 0 anillo interno … 1 externo
       const count  = Math.round(style.petalCount[0] + rnd() * (style.petalCount[1] - style.petalCount[0]));
-      const openA  = style.openAngle * (1 - t * 0.45);
+      // droop (iris): el anillo externo cae por debajo de la horizontal
+      const openA  = style.openAngle * (style.droop ? 1 + t * 1.5 : 1 - t * 0.45);
       const rad    = style.ringRadius * (1 + t * 0.9);
       const len0   = style.petalLen * (1 + t * 0.35);
       const angOff = (ring % 2) ? Math.PI / count : 0;      // alterna el calce entre anillos
@@ -168,7 +247,7 @@
       for (let i = 0; i < count; i++) {
         const len = len0 * (0.85 + rnd() * 0.3);
         const w   = style.petalW * (0.85 + rnd() * 0.3);
-        const mesh = new THREE.Mesh(bladeGeometry(w, len, 0.22, 6), bloomMat);
+        const mesh = new THREE.Mesh(bladeGeometry(w, len, 0.22, 6), matFor(ring, i, rings));
         if (twist) mesh.rotation.x = (rnd() - 0.5) * twist;   // pétalo ondulado (clavel)
 
         const theta = (i / count) * TAU + angOff;
@@ -186,7 +265,7 @@
     if (style.lip) {
       // labelo: el pétalo inferior agrandado que distingue a la orquídea
       const len = style.petalLen * 1.6, w = style.petalW * 1.8;
-      const mesh = new THREE.Mesh(bladeGeometry(w, len, 0.28, 6), bloomMat);
+      const mesh = new THREE.Mesh(bladeGeometry(w, len, 0.28, 6), matFor(0, 1, 1));
       const mount = new THREE.Group();
       mount.position.x = style.ringRadius * 0.6;
       mount.rotation.z = style.openAngle * 1.3;
@@ -222,19 +301,19 @@
   }
 
   /* flor "single": tallo + hojas + una cabeza (todas las STYLES sin kind) */
-  function buildSingle(rnd, style, bloomMat, centerMat, stemMat) {
+  function buildSingle(rnd, style, matFor, centerMat, stemMat) {
     const root = new THREE.Group();
-    const stemH = 0.55 + rnd() * 0.9;
+    const stemH = 0.45 + rnd() * 1.1;
     addStem(root, stemMat, stemH);
     addLeaves(root, rnd, stemMat, stemH);
-    addHead(root, rnd, style, bloomMat, centerMat, stemH);
+    addHead(root, rnd, style, matFor, centerMat, stemH);
     return { root, stemH, swaySpeed: 0.5 + rnd() * 0.6, swayAmp: 0.10 + rnd() * 0.10 };
   }
 
   /* lirio de los valles: campanitas diminutas alternadas colgando a
      lo largo del tercio superior de un tallo bajo, con hojas basales
      anchas envolviendo la base — no encaja en "una cabeza en la punta" */
-  function buildRaceme(rnd, style, bloomMat, centerMat, stemMat) {
+  function buildRaceme(rnd, style, matFor, centerMat, stemMat) {
     const root = new THREE.Group();
     const stemH = 0.5 + rnd() * 0.35;
     addStem(root, stemMat, stemH);
@@ -250,7 +329,7 @@
       bell.add(new THREE.Mesh(new THREE.SphereGeometry(0.015, 6, 5), centerMat));
       const petals = 5;
       for (let p = 0; p < petals; p++) {
-        const mesh = new THREE.Mesh(bladeGeometry(0.05, 0.07, 0.3, 5), bloomMat);
+        const mesh = new THREE.Mesh(bladeGeometry(0.05, 0.07, 0.3, 5), matFor(0, i, 1));
         const mount = new THREE.Group();
         mount.position.x = 0.02;
         mount.rotation.z = 0.9;
@@ -275,7 +354,7 @@
   /* buganvilla: brácteas planas y papiráceas en tríos alrededor de una
      florecita diminuta, varios tríos agrupados cerca de la copa —
      el color vívido está en la "bráctea", no en un pétalo clásico */
-  function buildCluster(rnd, style, bloomMat, centerMat, stemMat) {
+  function buildCluster(rnd, style, matFor, centerMat, stemMat) {
     const root = new THREE.Group();
     const stemH = 0.5 + rnd() * 0.7;
     addStem(root, stemMat, stemH);
@@ -285,7 +364,7 @@
     for (let t = 0; t < trios; t++) {
       const cluster = new THREE.Group();
       for (let b = 0; b < 3; b++) {
-        const mesh = new THREE.Mesh(bladeGeometry(0.22, 0.20, 0.06, 4), bloomMat);
+        const mesh = new THREE.Mesh(bladeGeometry(0.22, 0.20, 0.06, 4), matFor(0, t, 1));
         const mount = new THREE.Group();
         mount.position.x = 0.02;
         mount.rotation.z = 0.55 + rnd() * 0.2;
@@ -308,31 +387,110 @@
     return { root, stemH, swaySpeed: 0.5 + rnd() * 0.6, swayAmp: 0.08 + rnd() * 0.08 };
   }
 
+  /* lavanda: espiga de botones diminutos en espiral filotáctica sobre
+     un eje fino que prolonga el tallo — no hay "cabeza" ni pétalos */
+  function buildSpike(rnd, style, matFor, centerMat, stemMat) {
+    const root = new THREE.Group();
+    const stemH = 0.65 + rnd() * 0.5;
+    addStem(root, stemMat, stemH);
+    addLeaves(root, rnd, stemMat, stemH, { count: 3, yMin: 0.12, yMax: 0.5, len: 0.13, lenVar: 0.07, w: 0.05 });
+
+    const spikeLen = 0.3 + rnd() * 0.18;
+    const axis = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, spikeLen, 5), stemMat);
+    axis.position.y = stemH + spikeLen / 2;
+    root.add(axis);
+
+    const n = 12 + Math.floor(rnd() * 9);
+    for (let i = 0; i < n; i++) {
+      const f = n > 1 ? i / (n - 1) : 0;
+      const a = i * 2.4 + rnd() * 0.5;               // ángulo áureo aprox
+      const rad = 0.045 * (1 - f * 0.55);
+      const bud = new THREE.Mesh(new THREE.SphereGeometry(0.026 * (1 - f * 0.35), 5, 4), matFor(0, i, 1));
+      bud.scale.y = 1.5;
+      bud.position.set(Math.cos(a) * rad, stemH + f * spikeLen, Math.sin(a) * rad);
+      root.add(bud);
+    }
+
+    return { root, stemH: stemH + spikeLen, swaySpeed: 0.7 + rnd() * 0.6, swayAmp: 0.14 + rnd() * 0.10 };
+  }
+
+  /* diente de león: esfera de vilanos — filamentos radiales finísimos
+     con una puntita en el extremo, alrededor de un receptáculo */
+  function buildPuff(rnd, style, matFor, centerMat, stemMat) {
+    const root = new THREE.Group();
+    const stemH = 0.5 + rnd() * 0.55;
+    addStem(root, stemMat, stemH);
+    addLeaves(root, rnd, stemMat, stemH, { count: 2, yMin: 0.03, yMax: 0.1, len: 0.22, lenVar: 0.08, w: 0.09 });
+
+    const head = new THREE.Group();
+    head.position.y = stemH;
+    head.add(new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), centerMat));
+
+    const R = 0.16 + rnd() * 0.07;
+    const n = 34 + Math.floor(rnd() * 22);
+    const up = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i < n; i++) {
+      const z = rnd() * 2 - 1, a = rnd() * TAU, r = Math.sqrt(Math.max(0, 1 - z * z));
+      const dir = new THREE.Vector3(r * Math.cos(a), z, r * Math.sin(a));
+      const g = new THREE.Group();
+      const fil = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, R, 3), matFor(0, i, 1));
+      fil.position.y = R / 2;
+      const tip = new THREE.Mesh(new THREE.SphereGeometry(0.012, 4, 3), matFor(0, i + 1, 1));
+      tip.position.y = R;
+      g.add(fil, tip);
+      g.quaternion.setFromUnitVectors(up, dir);
+      head.add(g);
+    }
+
+    root.add(head);
+    return { root, stemH: stemH + R, swaySpeed: 0.6 + rnd() * 0.6, swayAmp: 0.12 + rnd() * 0.10 };
+  }
+
   /* ── modelo 3D determinista de la flor (sin tierra: el suelo es
         una losa compartida de toda la pradera) ── */
   function buildFlower(seed) {
     const rnd = mulberry32(hashStr(seed));
     const style = STYLES[Math.floor(rnd() * STYLES.length)];
     const palette = style.palette || BLOOMS;
-    const bloomHex = palette[Math.floor(rnd() * palette.length)];
+    const bloomHex = brighten(palette[Math.floor(rnd() * palette.length)]);
     const stemHex  = STEMCOLS[Math.floor(rnd() * STEMCOLS.length)];
-    const centerHex = style.centerHex || bloomHex;
+    const centerHex = brighten(style.centerHex || bloomHex);
 
     const bloomMat  = new THREE.MeshStandardMaterial({ color: bloomHex, flatShading: true, roughness: 0.7 });
     const centerMat = new THREE.MeshStandardMaterial({ color: centerHex, flatShading: true, roughness: 0.5, emissive: new THREE.Color(centerHex), emissiveIntensity: 0.12 });
     const stemMat   = new THREE.MeshStandardMaterial({ color: stemHex, flatShading: true, roughness: 0.8 });
+    const dispose = [bloomMat, centerMat, stemMat];
 
-    const built = style.kind === "raceme"  ? buildRaceme(rnd, style, bloomMat, centerMat, stemMat)
-                : style.kind === "cluster" ? buildCluster(rnd, style, bloomMat, centerMat, stemMat)
-                :                            buildSingle(rnd, style, bloomMat, centerMat, stemMat);
+    /* ~40% de las flores son bicolores: o alternan pétalo a pétalo o
+       reservan el segundo color para el anillo externo */
+    let matFor = function () { return bloomMat; };
+    if (palette.length > 1 && rnd() < 0.4) {
+      let idx2 = Math.floor(rnd() * palette.length);
+      if (palette[idx2] === bloomHex) idx2 = (idx2 + 1) % palette.length;
+      const bloomMat2 = new THREE.MeshStandardMaterial({ color: brighten(palette[idx2]), flatShading: true, roughness: 0.7 });
+      dispose.push(bloomMat2);
+      const outerMode = rnd() < 0.5;
+      matFor = function (ring, i, rings) {
+        if (outerMode && rings > 1) return ring === rings - 1 ? bloomMat2 : bloomMat;
+        return i % 2 ? bloomMat2 : bloomMat;
+      };
+    }
+
+    const built = style.kind === "raceme"  ? buildRaceme(rnd, style, matFor, centerMat, stemMat)
+                : style.kind === "cluster" ? buildCluster(rnd, style, matFor, centerMat, stemMat)
+                : style.kind === "spike"   ? buildSpike(rnd, style, matFor, centerMat, stemMat)
+                : style.kind === "puff"    ? buildPuff(rnd, style, matFor, centerMat, stemMat)
+                :                            buildSingle(rnd, style, matFor, centerMat, stemMat);
 
     const baseAngle = rnd() * TAU;
     built.root.rotation.y = baseAngle;
+    built.root.scale.setScalar(0.78 + rnd() * 0.55);   // porte: de flor menuda a ejemplar alto
+    built.root.rotation.z = (rnd() - 0.5) * 0.12;      // leve inclinación natural
 
     return {
       root: built.root, baseAngle, swaySpeed: built.swaySpeed, swayAmp: built.swayAmp, stemH: built.stemH,
       name: style.name,
-      dispose: [bloomMat, centerMat, stemMat]
+      dispose: dispose
     };
   }
 
