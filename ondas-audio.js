@@ -1,19 +1,23 @@
 /* ============================================================
    PANDORA — ondas-audio.js
    ------------------------------------------------------------
-   Sonido etéreo del modo "ondas": cada clic arpegia un acorde
-   SUSPENDIDO (sus2 / sus4) o MAJ7, todos diatónicos a Do mayor
-   para que cualquier secuencia de clics suene cohesionada, como
-   campanas bajo el agua.
-   · Voces = pares de senos con detune leve (batido lento) y
-     envolvente larga → timbre de cuenco / vidrio.
-   · Pseudo-reverb barata: eco con retroalimentación filtrada
-     en graves (delay + lowpass) compartido por todas las voces.
-   · La posición del clic pinta el sonido: X → paneo estéreo,
-     Y → octava (arriba agudo, abajo grave).
-   Además, splash() = sonido de INMERSIÓN al entrar al modo:
-   glissando grave que se hunde con el filtro cerrándose, más
-   burbujas que suben mientras "se llena el vaso".
+   Sonido etéreo del modo "ondas". Dos capas:
+
+   · NOTAS (clic) — cada clic toca UNA sola nota (no un acorde),
+     tomada de la pentatónica de Do mayor para que toda secuencia
+     de clics suene cohesionada, como campanas bajo el agua.
+     La X elige el grado de la escala; la Y, la octava; también
+     pinta el paneo estéreo. Timbre = par de senos con detune
+     leve (batido lento) y envolvente larga → cuenco / vidrio.
+
+   · CHISPAS (movimiento) — mientras el ratón se desplaza brotan
+     pequeñas notas CRISTALINAS (parciales de campana/vidrio,
+     agudas y brillantes), como un carillón. Se disparan cada vez
+     que el cursor acumula algo de distancia; la Y elige el tono
+     (agudo arriba), la X el paneo, y la velocidad el brillo.
+
+   Reverb barata compartida: eco con retroalimentación filtrada
+   en graves (delay + lowpass). splash() = inmersión al entrar.
    El AudioContext se crea perezosamente dentro de un gesto del
    usuario (política de autoplay).
    Expone window.PandoraSound = { start, stop, splash }.
@@ -22,21 +26,21 @@
   "use strict";
 
   const VOL = 0.55;         // ganancia maestra
-  const STRUM = 0.055;      // s entre notas del arpegio
-  const DUR = 3.2;          // s de cola de cada voz
+  const DUR = 3.2;          // s de cola de cada nota
 
-  /* acordes en semitonos sobre la raíz — todos en Do mayor */
-  const CHORDS = [
-    { rootHz: 261.63, iv: [0, 4, 7, 11] },   // Cmaj7
-    { rootHz: 174.61, iv: [0, 4, 7, 11] },   // Fmaj7
-    { rootHz: 196.00, iv: [0, 5, 7, 12] },   // Gsus4
-    { rootHz: 293.66, iv: [0, 2, 7, 12] },   // Dsus2
-    { rootHz: 220.00, iv: [0, 2, 7, 12] },   // Asus2
-    { rootHz: 164.81, iv: [0, 5, 7, 12] }    // Esus4
-  ];
+  /* pentatónica de Do mayor (una octava base): Do Re Mi Sol La */
+  const PENTA = [261.63, 293.66, 329.63, 392.00, 440.00];
 
-  let ac = null, master = null, delaySend = null;
-  let lastChord = -1;
+  /* cuantiza v∈[0,1] a la pentatónica repartida en 2 octavas */
+  function scaleFreq(v) {
+    const span = PENTA.length * 2;
+    let i = Math.round(Math.max(0, Math.min(1, v)) * (span - 1));
+    const oct = Math.floor(i / PENTA.length);
+    const deg = i % PENTA.length;
+    return PENTA[deg] * Math.pow(2, oct - 1); // centrado ~una octava abajo
+  }
+
+  let ac = null, master = null, delaySend = null, sparkBus = null;
 
   function ensure() {
     if (ac) return ac;
@@ -45,7 +49,7 @@
     ac = new AC();
     master = ac.createGain();
     master.gain.value = VOL;
-    // compresor suave al final: permite acordes generosos sin recorte
+    // compresor suave al final: evita recortes con voces generosas
     if (ac.createDynamicsCompressor) {
       const comp = ac.createDynamicsCompressor();
       comp.threshold.value = -18; comp.ratio.value = 6;
@@ -61,11 +65,17 @@
     const wet = ac.createGain(); wet.gain.value = 0.5;
     delay.connect(wet); wet.connect(master);
     delaySend = delay;
+    // bus de chispas: low-pass global velado + envío generoso a la reverb
+    const lp = ac.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 850; lp.Q.value = 0.5;
+    const revSend = ac.createGain(); revSend.gain.value = 0.75; // más cola que las notas de clic
+    lp.connect(master); lp.connect(revSend); revSend.connect(delay);
+    sparkBus = lp;
     return ac;
   }
 
-  function note(a, freq, t, x01, i, amp) {
-    amp = (amp || 1) * Math.max(0.06, 0.26 - i * 0.03);
+  /* ─── una nota individual (clic) ─── */
+  function note(a, freq, t, x01, amp) {
+    amp = (amp || 1) * 0.24;
     const o1 = a.createOscillator(); o1.type = "sine"; o1.frequency.value = freq;
     const o2 = a.createOscillator(); o2.type = "sine"; o2.frequency.value = freq * 1.003;
     const g = a.createGain();
@@ -84,21 +94,66 @@
     o1.stop(t + DUR + 0.1); o2.stop(t + DUR + 0.1);
   }
 
-  function strum(x01, y01) {
+  function pluck(x01, y01) {
     const a = ensure(); if (!a) return;
     if (a.state === "suspended") a.resume();
-    let ci;
-    do { ci = Math.floor(Math.random() * CHORDS.length); }
-    while (CHORDS.length > 1 && ci === lastChord);
-    lastChord = ci;
-    const ch = CHORDS[ci];
+    // X → grado de la escala · Y → octava (arriba agudo, abajo grave)
+    const deg = Math.max(0, Math.min(PENTA.length - 1, Math.floor(x01 * PENTA.length)));
     const oct = y01 < 0.33 ? 2 : (y01 > 0.8 ? 0.5 : 1);
-    const t0 = a.currentTime + 0.01;
-    for (let i = 0; i < ch.iv.length; i++) {
-      note(a, ch.rootHz * Math.pow(2, ch.iv[i] / 12) * oct, t0 + i * STRUM, x01, i);
+    note(a, PENTA[deg] * oct, a.currentTime + 0.01, x01, 1);
+  }
+
+  /* ─── chispas cristalinas (movimiento) ─── */
+  const SPARK_DIST = 95;    // px acumulados por chispa (espaciadas)
+  const SPARK_MIN_MS = 160; // ~6 chispas/s como máximo
+  let lastX = 0, lastY = 0, lastMoveT = 0, lastSparkT = 0, accDist = 0, seeded = false;
+
+  /* una nota onírica: senos velados con detune leve, ataque suave */
+  function sparkle(x01, y01, amp) {
+    const a = ensure(); if (!a) return;
+    const t = a.currentTime + 0.005;
+    // pentatónica 1–2 octavas arriba, según la altura (agudo arriba)
+    const deg = Math.max(0, Math.min(PENTA.length - 1, Math.floor((1 - y01) * PENTA.length)));
+    const oct = Math.random() < 0.45 ? 4 : 2;
+    const f = PENTA[deg] * oct;
+    // par de senos con batido lento → halo difuso, nada de filo de vidrio
+    const o1 = a.createOscillator(); o1.type = "sine"; o1.frequency.value = f;
+    const o2 = a.createOscillator(); o2.type = "sine"; o2.frequency.value = f * 1.006;
+    // lowpass velado: quita los agudos que sonaban cristalinos
+    const lp = a.createBiquadFilter(); lp.type = "lowpass";
+    lp.frequency.value = f * 2.2; lp.Q.value = 0.4;
+    const g  = a.createGain();
+    const A = 0.05 + Math.random() * 0.04;   // ataque suave: se cuela, no pincha
+    const D = 1.4 + Math.random() * 1.2;     // cola larga y difusa
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(amp, t + A);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + A + D);
+    o1.connect(lp); o2.connect(lp); lp.connect(g);
+    let out = g;
+    if (a.createStereoPanner) {
+      const p = a.createStereoPanner();
+      p.pan.value = Math.max(-1, Math.min(1, (x01 * 2 - 1) * 0.7));
+      g.connect(p); out = p;
     }
-    // brillo final: raíz una octava arriba, muy queda
-    note(a, ch.rootHz * 2 * oct, t0 + ch.iv.length * STRUM, x01, ch.iv.length, 0.4);
+    out.connect(sparkBus);   // low-pass global + reverb del bus de chispas
+    o1.start(t); o2.start(t);
+    o1.stop(t + A + D + 0.05); o2.stop(t + A + D + 0.05);
+  }
+
+  function onMove(e) {
+    const a = ensure(); if (!a) return;
+    if (a.state === "suspended") a.resume();
+    const now = performance.now();
+    if (!seeded) { lastX = e.clientX; lastY = e.clientY; lastMoveT = now; seeded = true; return; }
+    const dist = Math.hypot(e.clientX - lastX, e.clientY - lastY);
+    const speed = dist / Math.max(1, now - lastMoveT); // px/ms
+    lastX = e.clientX; lastY = e.clientY; lastMoveT = now;
+    accDist += dist;
+    if (accDist >= SPARK_DIST && now - lastSparkT >= SPARK_MIN_MS) {
+      accDist = 0; lastSparkT = now;
+      const amp = Math.min(0.075, 0.025 + speed * 0.035);
+      sparkle(e.clientX / innerWidth, e.clientY / innerHeight, amp);
+    }
   }
 
   /* inmersión: acompaña la animación de "llenado del vaso" */
@@ -138,12 +193,18 @@
   function onDown(e) {
     // el botón de alternar modo no debe sonar (cerraría el modo con cola)
     if (e.target && e.target.closest && e.target.closest("#fx-toggle")) return;
-    strum(e.clientX / innerWidth, e.clientY / innerHeight);
+    pluck(e.clientX / innerWidth, e.clientY / innerHeight);
   }
 
-  function start() { addEventListener("pointerdown", onDown); }
+  function start() {
+    seeded = false; accDist = 0;
+    addEventListener("pointerdown", onDown);
+    addEventListener("pointermove", onMove, { passive: true });
+  }
   function stop() {
     removeEventListener("pointerdown", onDown);
+    removeEventListener("pointermove", onMove);
+    seeded = false;
     if (ac && ac.state === "running") ac.suspend();
   }
 
