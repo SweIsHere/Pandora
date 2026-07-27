@@ -11,6 +11,12 @@
 
    Las palabras se leen en vivo de localStorage("pandora_poems"),
    así los poemas recién escritos aparecen volando.
+
+   Estética: el canvas se renderiza a MEDIA resolución con
+   image-rendering: pixelated y cada frame pasa por un DITHERING
+   ordenado (Bayer 4×4, pocos niveles por canal, alfa incluido) →
+   los glows de peces/medusas/palabras se deshacen en grano de
+   grabado. Entra con un fundido lento, tras el "llenado" del agua.
    Expone window.PandoraLife = { start, stop }.
    ============================================================ */
 (function () {
@@ -23,19 +29,44 @@
   const FISH_N = 5, JELLY_N = 3, WORD_MAX = 16;
   const CORE = "#d2ddff";
 
-  let cv = null, ctx = null, W = 0, H = 0, DPR = 1;
-  let running = false, raf = 0, last = 0;
+  /* dithering: media resolución + Bayer 4×4 con pocos niveles */
+  const RES = 0.5;
+  const LEVELS = 4;
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+  let cv = null, ctx = null, W = 0, H = 0;
+  let running = false, raf = 0, last = 0, fadeStart = 0;
   const fish = [], jellies = [], words = [];
   let wordPool = [];
 
   const rnd = (a, b) => a + Math.random() * (b - a);
 
   function resize() {
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
     W = innerWidth; H = innerHeight;
-    cv.width = Math.floor(W * DPR); cv.height = Math.floor(H * DPR);
+    cv.width = Math.max(1, Math.floor(W * RES));
+    cv.height = Math.max(1, Math.floor(H * RES));
     cv.style.width = W + "px"; cv.style.height = H + "px";
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.setTransform(RES, 0, 0, RES, 0, 0);
+  }
+
+  /* cuantiza r/g/b/a con umbral Bayer → grano de grabado en los glows */
+  function dither() {
+    const wpx = cv.width, hpx = cv.height;
+    const img = ctx.getImageData(0, 0, wpx, hpx);
+    const d = img.data, L1 = LEVELS - 1, STEP = 255 / L1;
+    for (let y = 0; y < hpx; y++) {
+      const row = (y & 3) << 2;
+      for (let x = 0; x < wpx; x++) {
+        const i = (y * wpx + x) << 2;
+        if (d[i + 3] === 0) continue;
+        const b = (BAYER[row | (x & 3)] + 0.5) / 16;
+        d[i]     = STEP * ((d[i]     / 255 * L1 + b) | 0);
+        d[i + 1] = STEP * ((d[i + 1] / 255 * L1 + b) | 0);
+        d[i + 2] = STEP * ((d[i + 2] / 255 * L1 + b) | 0);
+        d[i + 3] = STEP * ((d[i + 3] / 255 * L1 + b) | 0);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
   }
 
   /* halo radial reutilizable = resplandor barato (un solo relleno) */
@@ -204,6 +235,9 @@
   function frame(now) {
     if (!running) return;
     raf = requestAnimationFrame(frame);
+    // fundido de entrada en JS: la vida emerge cuando el agua ya subió
+    const fu = Math.min(1, Math.max(0, (now - fadeStart - 900) / 1800));
+    cv.style.opacity = (fu * fu * (3 - 2 * fu)).toFixed(3);
     let dt = (now - last) / 1000; last = now;
     if (!(dt > 0)) return;
     if (dt > 0.05) dt = 0.05;
@@ -219,13 +253,17 @@
     if (!REDUCED && wordPool.length && words.length < WORD_MAX && Math.random() < 0.05) {
       const w = makeWord(); if (w) words.push(w);
     }
+    dither();
   }
 
   function start() {
     cv = document.getElementById("fx-life");
     if (!cv) return;
     ctx = cv.getContext("2d");
+    cv.style.imageRendering = "pixelated";
+    cv.style.opacity = "0";
     cv.style.display = "block";
+    fadeStart = performance.now();
     resize();
     refreshWords();
     if (!fish.length) for (let i = 0; i < FISH_N; i++) fish.push(makeFish());
@@ -243,7 +281,11 @@
     running = false;
     if (raf) cancelAnimationFrame(raf);
     removeEventListener("resize", resize);
-    if (cv && ctx) { ctx.clearRect(0, 0, W, H); cv.style.display = "none"; }
+    if (cv && ctx) {
+      ctx.clearRect(0, 0, W, H);
+      cv.style.opacity = "0";
+      cv.style.display = "none";
+    }
   }
 
   window.PandoraLife = { start: start, stop: stop };

@@ -15,6 +15,13 @@
      de los cruces "sangra" hacia fuera como un flare óptico.
    · Todo en tinta azul (nunca blanco), sobre un escenario oscuro
      para que el bloom tenga contraste.
+   · Bajo los anillos flota un VELO etéreo (cáusticas de seno
+     deformado, tipo aurora) animado en el mismo shader, y el
+     composite final aplica un DITHERING ordenado (Bayer 4×4)
+     ligero que da grano de grabado a los degradados.
+   · Al ENTRAR al modo, una superficie de agua con oleaje sube
+     desde abajo ("llenado del vaso" / inmersión): todo lo que
+     queda bajo el menisco se enciende, lo demás espera.
    Expone window.PandoraRings = { start, stop, resize }.
    No comparte contexto con el renderer de sketch.js.
    ============================================================ */
@@ -36,6 +43,8 @@
   const RINGS_FRAG = `
     precision highp float;
     uniform vec2  uRes;
+    uniform float uTime;
+    uniform float uFill;
     uniform vec3  uColor;
     uniform vec3  uRing[${MAX_RINGS}];   // x, y (px), radius (px)
     uniform float uAlpha[${MAX_RINGS}];
@@ -46,18 +55,73 @@
     void main() {
       vec2 p = vUv * uRes;
       vec3 acc = vec3(0.0);
+
+      // llenado del vaso: superficie con oleaje que sube (uFill 0→1);
+      // sd < 0 = sumergido. El oleaje se calma al terminar de llenar.
+      float filling = step(0.0001, uFill) * (1.0 - step(0.999, uFill));
+      float lvl = uFill * uRes.y * 1.18;
+      float wob = sin(p.x * 0.016 + uTime * 2.4) * 9.0
+                + sin(p.x * 0.043 - uTime * 1.6) * 5.0;
+      float surfY = lvl + wob * (1.0 - 0.85 * uFill);
+      float sd = p.y - surfY;
+      float under = smoothstep(2.0, -14.0, sd);
+
+      // velo etéreo: cáusticas de seno deformado (aurora lenta).
+      // Cada iteración pliega el dominio y suma un filamento suave;
+      // al elevar al cuadrado sólo sobreviven las vetas más claras.
+      vec2 av = vUv; av.x *= uRes.x / max(uRes.y, 1.0);
+      float tt = uTime * 0.10;
+      vec2 aq = av * 2.8;
+      float veil = 0.0;
+      for (int k = 0; k < 3; k++) {
+        float fk = float(k);
+        aq += 0.45 * vec2(
+          sin(aq.y * 1.60 + tt * (1.0 + fk * 0.40) + fk * 1.7),
+          cos(aq.x * 1.35 - tt * (1.4 - fk * 0.25) + fk * 2.3));
+        veil += 1.0 / (1.0 + 11.0 * abs(sin(aq.x + cos(aq.y + tt))));
+      }
+      veil *= 0.3333;
+      vec3 veilTint = mix(uColor, vec3(0.16, 0.42, 0.62),
+                          0.5 + 0.5 * sin(av.x * 1.3 + tt * 2.0));
+      acc += veilTint * veil * veil * 0.55 * under;
+
+      // volumen sumergido + claridad junto a la superficie
+      acc += uColor * under * 0.035;
+      acc += uColor * exp(-abs(sd) / 55.0) * under * 0.14;
+
+      // menisco: línea con glow y espuma que chispea a lo largo
+      float line = exp(-sd * sd / (2.0 * 3.0 * 3.0))
+                 + 0.45 * exp(-sd * sd / (2.0 * 15.0 * 15.0));
+      float foam = 0.6 + 0.4 * sin(p.x * 0.11 + uTime * 7.0)
+                             * sin(p.x * 0.053 - uTime * 4.2);
+      acc += mix(uColor, vec3(0.32, 0.58, 0.85), 0.45) * line * foam * 1.15 * filling;
+
+      // burbujas que suben hacia la superficie mientras se llena
+      for (int b = 0; b < 6; b++) {
+        float fb = float(b);
+        float bx = fract(sin((fb + 1.0) * 12.9898) * 43758.5453);
+        float sp = 0.22 + 0.09 * fract(sin((fb + 1.0) * 78.233) * 12543.21);
+        float prog = fract(uTime * sp + fb * 0.618);
+        vec2 bp = vec2(bx * uRes.x + sin(uTime * 2.0 + fb * 2.1) * 9.0,
+                       prog * max(surfY - 8.0, 0.0));
+        float bd = length(p - bp);
+        float br = 2.2 + 1.3 * fract(fb * 0.417);
+        acc += uColor * exp(-bd * bd / (2.0 * br * br))
+             * (0.5 + 0.5 * (1.0 - prog)) * filling * 1.1;
+      }
+
       for (int i = 0; i < ${MAX_RINGS}; i++) {
         if (i >= uCount) break;
         vec3 rg = uRing[i];
         float d = abs(length(p - rg.xy) - rg.z);
         float core  = smoothstep(2.4, 0.0, d);
-        float skirt = exp(-(d*d) / (2.0*18.0*18.0)) * 0.55;
-        acc += uColor * (core + skirt) * uAlpha[i];
+        float skirt = exp(-(d*d) / (2.0*24.0*24.0)) * 0.5;
+        acc += uColor * (core + skirt) * uAlpha[i] * under;
       }
       float dc = length(p - uCursor.xy);
       float cGlow = exp(-(dc*dc) / (2.0*9.0*9.0));
       float cCore = smoothstep(3.0, 0.0, dc);
-      acc += uColor * (cGlow * 1.1 + cCore) * uCursorA;
+      acc += uColor * (cGlow * 1.1 + cCore) * uCursorA * under;
       gl_FragColor = vec4(acc, 1.0);
     }
   `;
@@ -85,10 +149,18 @@
     uniform sampler2D uBloom;
     uniform float uBloomStrength;
     varying vec2 vUv;
+    // Bayer 2×2 compacto; anidándolo a media escala se obtiene la
+    // matriz 4×4 sin tablas ni operadores de bits (GLSL ES 1.0).
+    float bayer2(vec2 a) { a = floor(a); return fract(a.x * 0.5 + a.y * a.y * 0.75); }
     void main() {
       vec3 s = texture2D(uSharp, vUv).rgb;
       vec3 b = texture2D(uBloom, vUv).rgb * uBloomStrength;
       vec3 c = 1.0 - (1.0 - s) * (1.0 - b);   // screen blend, evita recorte duro
+      // dithering ordenado: cuantiza a pocos niveles con umbral Bayer 4×4
+      // en celdas de 2px → los degradados del velo/bloom se deshacen en
+      // grano de grabado bien visible
+      float bay = bayer2(gl_FragCoord.xy * 0.25) * 0.25 + bayer2(gl_FragCoord.xy * 0.5);
+      c = floor(c * 12.0 + bay) / 12.0;
       float a = clamp(max(max(c.r, c.g), c.b) * 1.35, 0.0, 1.0);
       gl_FragColor = vec4(c, a);
     }
@@ -99,6 +171,8 @@
   let rtScene, rtBlurA, rtBlurB;
   let canvas, running = false, raf = 0;
   let w = 1, h = 1;
+  let fillStart = 0;                 // inicio de la animación de llenado
+  const FILL_MS = 2600;
 
   const rings = [];
   const pointer = { x: 0, y: 0, seen: false };
@@ -125,6 +199,8 @@
 
     const ringUniforms = {
       uRes: { value: new THREE.Vector2(1, 1) },
+      uTime: { value: 0 },
+      uFill: { value: 0 },
       uColor: { value: new THREE.Vector3(COLOR[0], COLOR[1], COLOR[2]) },
       uRing: { value: Array.from({ length: MAX_RINGS }, () => new THREE.Vector3()) },
       uAlpha: { value: new Float32Array(MAX_RINGS) },
@@ -201,6 +277,9 @@
     if (!running) return;
     const now = performance.now();
     const u = matRings.uniforms;
+    u.uTime.value = now * 0.001;
+    const fp = Math.min(1, (now - fillStart) / FILL_MS);
+    u.uFill.value = fp * fp * (3 - 2 * fp);   // smoothstep: arranca y remata suave
     const ringArr = u.uRing.value, alphaArr = u.uAlpha.value;
     let n = 0;
     for (let i = rings.length - 1; i >= 0; i--) {
@@ -237,6 +316,7 @@
     if (!THREE) return;
     if (!renderer) init(cv);
     resize();
+    fillStart = performance.now();   // cada entrada al modo re-llena el vaso
     addEventListener("pointermove", onMove, { passive: true });
     addEventListener("pointerdown", onDown);
     addEventListener("pointerleave", onLeave);

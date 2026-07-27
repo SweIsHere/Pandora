@@ -7,7 +7,8 @@
    · "ondas"  → anillos expansivos con bloom real, dibujados con
                 three.js/shaders por pointer-rings.js sobre un
                 escenario oscuro (#fx-stage) + canvas WebGL
-                (#fx-rings). Ver ese archivo para el detalle.
+                (#fx-rings), más acordes etéreos al clic
+                (ondas-audio.js). Ver esos archivos para el detalle.
    Alternar con el botón #fx-toggle o la tecla "D"; se recuerda
    en localStorage. No toca sketch.js ni el motor de atractores.
    ============================================================ */
@@ -107,13 +108,20 @@
     if (ondas) {
       if (window.PandoraRings && ringsCv) window.PandoraRings.start(ringsCv);
       if (window.PandoraLife) window.PandoraLife.start();
+      if (window.PandoraSound) window.PandoraSound.start();
     } else {
       if (window.PandoraRings) window.PandoraRings.stop();
       if (window.PandoraLife) window.PandoraLife.stop();
+      if (window.PandoraSound) window.PandoraSound.stop();
       ctx.clearRect(0, 0, innerWidth, innerHeight);
     }
   }
-  function toggleMode() { mode = mode === "tinta" ? "ondas" : "tinta"; applyMode(); }
+  function toggleMode() {
+    mode = mode === "tinta" ? "ondas" : "tinta";
+    applyMode();
+    // sonido de inmersión: sólo aquí (clic = gesto real, autoplay permitido)
+    if (mode === "ondas" && window.PandoraSound) window.PandoraSound.splash();
+  }
   if (toggle) toggle.addEventListener("click", toggleMode);
   addEventListener("keydown", (e) => {
     if (e.key === "Escape" && mode === "ondas") { mode = "tinta"; applyMode(); }
