@@ -1067,6 +1067,599 @@ input[type="color"] { padding: 3px; height: 38px; cursor: pointer; }
 /* toggle de nombres: ocultar todas las etiquetas de golpe */
 .garden-scene.labels-hidden .garden-label { display: none; }
 
+/* ── kaleidoscopio ──────────────────────────────────────────
+   dos ventanas hermanas: el taller (canvas 2D donde se dibujan
+   los objetos) y el tubo (el ocular WebGL). Mismo bisel Win95
+   que el resto del sitio; dentro, fondo de tinta para que el
+   vidrio de las formas tenga contra qué brillar. */
+.kal {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.kal-pane {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--bevel-dk);
+  border-top-color: var(--bevel-lt);
+  border-left-color: var(--bevel-lt);
+  border-radius: var(--radius);
+  box-shadow: inset -1px -1px 0 var(--bevel-dk), inset 1px 1px 0 var(--bevel-lt);
+  overflow: hidden;
+}
+
+.kal-count {
+  font-family: var(--mono);
+  font-size: .62rem;
+  letter-spacing: .08em;
+  color: var(--muted);
+}
+.kal-count.kal-flash { animation: kal-flash .5s ease; }
+@keyframes kal-flash {
+  0%, 100% { color: var(--muted); }
+  25%, 75% { color: #c0392b; transform: translateX(2px); }
+  50%      { color: #c0392b; transform: translateX(-2px); }
+}
+
+/* barra de herramientas de dibujo */
+.kal-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--divider);
+  background: rgba(255,255,255,.35);
+}
+.kal-tool {
+  font-family: var(--mono);
+  font-size: .64rem;
+  letter-spacing: .02em;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: var(--cur-hand, pointer);
+  transition: color .12s, border-color .12s, background .12s;
+}
+.kal-tool:hover { color: var(--text); border-color: var(--bevel-dk); }
+.kal-tool.active {
+  color: #fff;
+  background: var(--blue);
+  border-color: var(--blue);
+}
+.kal-close-poly { margin-left: auto; color: var(--blue); border-color: var(--blue); }
+
+/* la cámara de objetos: lienzo cuadrado de tinta */
+.kal-board {
+  padding: 10px;
+  background: var(--title-bar);
+  border-bottom: 1px solid var(--divider);
+}
+#kal-draw {
+  display: block;
+  width: 100%;
+  border-radius: 3px;
+  border: 1px solid var(--bevel-dk);
+  box-shadow: inset 0 0 22px rgba(0,0,0,.55);
+  cursor: crosshair;
+  touch-action: none;             /* dibujar no debe hacer scroll */
+}
+/* mirando el reparto no se dibuja: es una vista, no un lienzo */
+#kal-draw.kal-viewing { cursor: var(--cur-arrow, default); border-color: var(--blue); }
+
+/* controles de la forma seleccionada */
+.kal-row {
+  display: flex;
+  gap: 10px;
+  padding: 12px 12px 6px;
+  flex-wrap: wrap;
+}
+.kal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 92px;
+}
+.kal-field.kal-narrow { flex: 0 0 54px; min-width: 54px; }
+/* fila del reparto: el select crece, el botón se pega a su línea base */
+.kal-row-tight { padding-top: 2px; align-items: flex-end; }
+.kal-row-tight .gc-btn { flex: 0 0 auto; padding: 7px 10px; }
+.kal-field > span {
+  font-family: var(--mono);
+  font-size: .58rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.kal-field > span b { font-weight: normal; color: var(--blue); }
+.kal-field select {
+  font-family: "FOTSkip", sans-serif;
+  font-size: .78rem;
+  background: var(--bg);
+  border: 1px solid var(--divider);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 6px 7px;
+  width: 100%;
+  cursor: var(--cur-hand, pointer);
+}
+.kal-field select:focus { outline: none; border-color: var(--blue); }
+.kal-field input[type="color"] { height: 32px; padding: 2px; }
+
+/* línea de estado de la forma seleccionada */
+.kal-selinfo {
+  margin: 0;
+  padding: 2px 12px 8px;
+  font-family: var(--mono);
+  font-size: .58rem;
+  letter-spacing: .03em;
+  color: var(--muted);
+  min-height: 1em;
+}
+
+/* muestrario de formas: con veinte objetos, una rejilla de fichas
+   (cada una es la forma pintada de verdad, no un color plano) */
+.kal-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+  gap: 6px;
+  padding: 2px 12px 4px;
+  max-height: 168px;
+  overflow-y: auto;
+}
+.kal-list-empty {
+  grid-column: 1 / -1;
+  font-family: var(--mono);
+  font-size: .6rem;
+  color: var(--muted);
+  opacity: .75;
+  padding: 8px 2px;
+}
+.kal-chip {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--bevel-dk);
+  border-radius: 4px;
+  overflow: visible;
+  cursor: var(--cur-hand, pointer);
+  transition: border-color .12s, box-shadow .12s, transform .12s;
+}
+.kal-chip:hover { transform: translateY(-1px); border-color: var(--muted); }
+.kal-chip.sel {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px rgba(36, 62, 196, .28);
+}
+.kal-chip canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 3px;
+}
+.kal-del {
+  position: absolute;
+  top: -6px; right: -6px;
+  width: 16px; height: 16px;
+  line-height: 1;
+  font-size: .74rem;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--divider);
+  border-radius: 50%;
+  cursor: var(--cur-hand, pointer);
+  opacity: 0;
+  transition: .12s;
+}
+.kal-chip:hover .kal-del, .kal-chip.sel .kal-del { opacity: 1; }
+.kal-del:hover { color: #c0392b; border-color: #e2b3ad; }
+
+.kal-btns {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 12px;
+}
+.kal-btns .btn-solid, .kal-btns .btn-ghost { font-size: .78rem; padding: 8px 14px; }
+
+.kal-hint {
+  margin: 0;
+  padding: 0 12px 12px;
+  font-family: var(--mono);
+  font-size: .58rem;
+  letter-spacing: .02em;
+  line-height: 1.5;
+  color: var(--muted);
+  opacity: .8;
+}
+.kal-hint b { font-weight: normal; color: var(--blue); }
+
+/* el ocular: disco de latón con el canvas WebGL dentro */
+.kal-lens-wrap {
+  padding: 14px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(36,62,196,.10), transparent 62%),
+    var(--title-bar);
+  border-bottom: 1px solid var(--divider);
+}
+.kal-lens {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  border-radius: 50%;
+  /* aro del tubo: bisel metálico alrededor del cristal */
+  background: #0e0d0c;
+  box-shadow:
+    0 0 0 1px var(--bevel-dk),
+    0 0 0 6px var(--surface),
+    0 0 0 7px var(--bevel-dk),
+    inset 0 2px 10px rgba(0,0,0,.9),
+    0 8px 18px rgba(60,46,30,.28);
+}
+#kal-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  cursor: grab;
+  touch-action: none;             /* el arrastre gira el tubo */
+}
+#kal-canvas:active { cursor: grabbing; }
+
+/* anillo de glifos: gira al revés que el tubo, sobre el canto ya
+   viñeteado — donde no tapa nada */
+#kal-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  will-change: transform;
+}
+
+.kal-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: .66rem;
+  letter-spacing: .06em;
+  line-height: 1.9;
+  color: #8e8a7e;
+  pointer-events: none;
+}
+.kal-empty span { font-size: .56rem; opacity: .7; }
+
+.kal-ctrls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  padding: 14px 12px 4px;
+}
+.kal-slider { display: flex; flex-direction: column; gap: 3px; }
+.kal-slider.kal-wide { grid-column: 1 / -1; }
+.kal-slider > span {
+  font-family: var(--mono);
+  font-size: .58rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.kal-slider > span b { font-weight: normal; color: var(--blue); }
+.kal-slider input[type="range"] { width: 100%; accent-color: var(--blue); cursor: var(--cur-hand, pointer); }
+
+/* ── pantalla completa ──
+   El panel del tubo se convierte en una sala oscura: el ocular al
+   centro, y los mandos flotando abajo, que se retiran solos.
+   Todo cuelga de .kal-fs (clase puesta por JS) y no de :fullscreen:
+   un navegador que no entienda el pseudo-selector tiraría la regla
+   entera si los mezclamos en una misma lista. */
+#kal-tube-pane.kal-fs {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: #08070b;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: hidden;
+}
+#kal-tube-pane.kal-fs > .panel-label,
+#kal-tube-pane.kal-fs > .kal-hint { display: none; }
+
+#kal-tube-pane.kal-fs .kal-lens-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: 0;
+}
+#kal-tube-pane.kal-fs .kal-lens {
+  width: min(88vh, 94vw);
+  height: min(88vh, 94vw);
+  aspect-ratio: auto;
+  box-shadow:
+    0 0 0 1px rgba(150, 140, 200, .28),
+    0 0 0 7px rgba(255, 255, 255, .04),
+    0 0 0 8px rgba(150, 140, 200, .18),
+    inset 0 2px 22px rgba(0, 0, 0, .9),
+    0 0 90px rgba(70, 60, 140, .45);
+}
+
+/* los mandos, en una barra de cristal al pie */
+#kal-tube-pane.kal-fs .kal-hud {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  z-index: 5;
+  width: min(680px, 92vw);
+  display: flex;
+  flex-direction: column;
+  background: rgba(16, 14, 24, .82);
+  border: 1px solid rgba(160, 150, 210, .22);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: opacity .5s ease, transform .5s ease;
+}
+#kal-tube-pane.kal-fs.kal-idle .kal-hud {
+  opacity: 0;
+  transform: translateX(-50%) translateY(14px);
+  pointer-events: none;
+}
+#kal-tube-pane.kal-fs .kal-ctrls {
+  grid-template-columns: repeat(4, 1fr);
+  padding: 12px 14px 2px;
+}
+#kal-tube-pane.kal-fs .kal-slider.kal-wide { grid-column: auto; }
+#kal-tube-pane.kal-fs .kal-slider > span { color: #a9a2c4; }
+#kal-tube-pane.kal-fs .kal-btns { padding: 10px 14px 12px; }
+#kal-tube-pane.kal-fs .gc-btn {
+  color: #a9a2c4;
+  background: rgba(255, 255, 255, .05);
+  border-color: rgba(160, 150, 210, .26);
+}
+#kal-tube-pane.kal-fs .gc-btn.on { color: #c9c2ff; border-color: #6f66c8; }
+
+@media (max-width: 720px) {
+  .kal { grid-template-columns: 1fr; }
+  .kal-ctrls { grid-template-columns: 1fr 1fr; }
+  #kal-tube-pane.kal-fs .kal-ctrls { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── autómatas ──────────────────────────────────────────────
+   Mismas dos ventanas hermanas que el kaleidoscopio: el banco
+   (la lámina de montaje y el reparto de materia) y la arena
+   (los dos muñecos, las barras y el diario del combate). Todo
+   con el bisel Win95 de la casa; la lámina va sobre papel, la
+   arena también — aquí no hay tinta de fondo: son planchas de
+   manual, no vidrio. */
+.aut {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.aut-pane {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--bevel-dk);
+  border-top-color: var(--bevel-lt);
+  border-left-color: var(--bevel-lt);
+  border-radius: var(--radius);
+  box-shadow: inset -1px -1px 0 var(--bevel-dk), inset 1px 1px 0 var(--bevel-lt);
+  overflow: hidden;
+}
+.aut-pane .panel-label b { font-weight: normal; color: var(--blue); }
+
+/* la lámina y el ruedo: papel cuadriculado bajo el dibujo */
+.aut-plate, .aut-ring {
+  padding: 10px;
+  background:
+    repeating-linear-gradient(0deg, rgba(139,136,126,.10) 0 1px, transparent 1px 14px),
+    repeating-linear-gradient(90deg, rgba(139,136,126,.10) 0 1px, transparent 1px 14px),
+    var(--title-bar);
+  border-bottom: 1px solid var(--divider);
+}
+.aut-plate canvas, .aut-ring canvas {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--bevel-dk);
+  border-radius: 3px;
+  background: rgba(255,255,255,.42);
+}
+
+.aut-row { padding: 12px 12px 2px; }
+.aut-row .kal-field input { padding: 6px 9px; font-size: .82rem; }
+
+/* ── el reparto: una fila por pieza ── */
+.aut-parts { padding: 10px 12px 4px; }
+
+.aut-part {
+  display: grid;
+  grid-template-columns: 82px 1fr auto;
+  grid-template-areas: "name pips btns" "der der der";
+  align-items: center;
+  gap: 4px 8px;
+  padding: 5px 0;
+  border-bottom: 1px dotted var(--divider);
+}
+.aut-part:last-child { border-bottom: 0; }
+
+.ap-name {
+  grid-area: name;
+  font-family: var(--mono);
+  font-size: .62rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.aut-part:hover .ap-name { color: var(--text); }
+
+.ap-pips { grid-area: pips; display: flex; gap: 3px; }
+.ap-pips i {
+  flex: 1;
+  max-width: 15px;
+  height: 11px;
+  border: 1px solid var(--bevel-dk);
+  border-radius: 2px;
+  background: rgba(255,255,255,.5);
+  cursor: var(--cur-hand, pointer);
+  transition: background .1s, border-color .1s;
+}
+.ap-pips i:hover { border-color: var(--blue); }
+.ap-pips i.on { background: var(--blue); border-color: var(--blue); }
+/* lo que aún podrías pagar con la materia libre */
+.ap-pips i.reach { border-color: var(--muted); background: rgba(36,62,196,.10); }
+
+.ap-btns { grid-area: btns; display: flex; gap: 4px; }
+.ap-btn {
+  width: 21px; height: 21px;
+  line-height: 1;
+  font-family: var(--mono);
+  font-size: .78rem;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--bevel-dk);
+  border-top-color: var(--bevel-lt);
+  border-left-color: var(--bevel-lt);
+  border-radius: 3px;
+  cursor: var(--cur-hand, pointer);
+  transition: color .12s, filter .12s;
+}
+.ap-btn:hover:not(:disabled) { color: var(--blue); }
+.ap-btn:active:not(:disabled) { filter: brightness(.94); }
+.ap-btn:disabled { opacity: .35; cursor: default; }
+
+.ap-derived {
+  grid-area: der;
+  font-family: var(--mono);
+  font-size: .56rem;
+  letter-spacing: .04em;
+  color: var(--blue);
+  opacity: .75;
+  padding-left: 90px;
+}
+
+/* ── barras de núcleo ── */
+.aut-bars { padding: 12px 12px 6px; display: flex; flex-direction: column; gap: 7px; }
+.aut-bar {
+  display: grid;
+  grid-template-columns: 1fr 52px;
+  grid-template-areas: "name hp" "track track";
+  align-items: center;
+  gap: 3px 8px;
+}
+.ab-name {
+  grid-area: name;
+  font-family: var(--mono);
+  font-size: .6rem;
+  letter-spacing: .06em;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ab-hp {
+  grid-area: hp;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: .58rem;
+  color: var(--muted);
+}
+.ab-track {
+  grid-area: track;
+  display: block;
+  height: 8px;
+  background: rgba(255,255,255,.55);
+  border: 1px solid var(--bevel-dk);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.ab-track i {
+  display: block;
+  height: 100%;
+  background: var(--blue);
+  transition: width .25s ease;
+}
+.aut-bar-foe .ab-track i { background: #a5442f; }
+.aut-bar.low .ab-track i { background: #c0392b; }
+.aut-bar.out { opacity: .5; }
+.aut-bar.out .ab-track i { background: var(--muted); }
+
+/* ── el diario del combate ── */
+.aut-log {
+  margin: 4px 12px 0;
+  padding: 9px 10px;
+  height: 132px;
+  overflow-y: auto;
+  background: rgba(255,255,255,.42);
+  border: 1px solid var(--bevel-dk);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: .6rem;
+  line-height: 1.75;
+  color: var(--text);
+}
+.aut-line { animation: aut-in .22s ease; }
+@keyframes aut-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; } }
+.aut-sep    { color: var(--muted); letter-spacing: .1em; margin-top: 4px; }
+.aut-flavor { color: var(--muted); font-style: italic; }
+.aut-you    { color: var(--blue); }
+.aut-foe    { color: #a5442f; }
+.aut-crit   { color: #c0392b; }
+.aut-miss   { color: var(--muted); opacity: .8; }
+.aut-soak   { color: var(--muted); opacity: .85; padding-left: 8px; }
+.aut-read   { color: var(--blue); opacity: .85; }
+.aut-win    { color: var(--blue); }
+
+/* ── la fila de los cinco ── */
+.aut-levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 10px 12px 2px;
+}
+.aut-lv {
+  font-family: var(--mono);
+  font-size: .55rem;
+  letter-spacing: .04em;
+  color: var(--muted);
+  background: rgba(255,255,255,.45);
+  border: 1px solid var(--divider);
+  border-radius: 3px;
+  padding: 3px 6px;
+  cursor: default;
+}
+.aut-lv.now  { color: #fff; background: var(--blue); border-color: var(--blue); }
+.aut-lv.done { color: var(--muted); border-style: dashed; text-decoration: line-through; opacity: .7; }
+
+.aut-pane .kal-btns .btn-solid:disabled { opacity: .45; cursor: default; }
+.aut-pane .kal-btns .btn-solid:disabled:hover { background: var(--text); }
+
+@media (max-width: 720px) {
+  .aut { grid-template-columns: 1fr; }
+  .aut-part { grid-template-columns: 74px 1fr auto; }
+  .ap-derived { padding-left: 82px; }
+}
+
 /* ── footer ── */
 .ftr {
   border-top: 1px solid var(--divider);

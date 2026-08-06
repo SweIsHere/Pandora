@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Pandora</title>
-<link rel="stylesheet" href="style.css?v=24" />
+<link rel="stylesheet" href="style.css?v=28" />
 </head>
 <body>
 
@@ -27,6 +27,12 @@
   </button>
   <button class="nav-item" data-sec="babilonia">
     <span class="nav-num">03</span>babilonia garden<span class="nav-ind">◄</span>
+  </button>
+  <button class="nav-item" data-sec="kaleidoscopio">
+    <span class="nav-num">04</span>kaleidoscopio<span class="nav-ind">◄</span>
+  </button>
+  <button class="nav-item" data-sec="automatas">
+    <span class="nav-num">05</span>autómatas<span class="nav-ind">◄</span>
   </button>
 </nav>
 
@@ -145,6 +151,211 @@
     </div>
   </section>
 
+  <!-- kaleidoscopio -->
+  <section id="sec-kaleidoscopio" class="sec">
+    <div class="sec-head">
+      <span class="sec-kicker">04 — óptica</span>
+      <h2 class="sec-title">Kaleidoscopio</h2>
+      <p class="sec-hint">dibuja hasta veinte formas, dales color, textura y material — luego déjalas caer en el tubo</p>
+    </div>
+
+    <div class="kal">
+
+      <!-- ── el taller: cámara de objetos ── -->
+      <div class="kal-pane">
+        <div class="panel-label">
+          <span>taller — cámara de objetos</span>
+          <span class="kal-count" id="kal-count">0 / 20</span>
+        </div>
+
+        <div class="kal-tools">
+          <button class="kal-tool active" type="button" data-tool="libre" title="trazo libre">✎ libre</button>
+          <button class="kal-tool" type="button" data-tool="poligono" title="clic por vértice · doble clic o Enter para cerrar">⬡ polígono</button>
+          <button class="kal-tool" type="button" data-tool="circulo" title="arrastra desde el centro">◯ círculo</button>
+          <button class="kal-tool" type="button" data-tool="triangulo" title="arrastra desde el centro">△ triángulo</button>
+          <button class="kal-tool" type="button" data-tool="estrella" title="arrastra desde el centro">✦ estrella</button>
+          <button class="kal-tool kal-close-poly" type="button" id="kal-close-poly" style="display:none">✓ cerrar</button>
+        </div>
+
+        <div class="kal-board">
+          <canvas id="kal-draw"></canvas>
+        </div>
+
+        <div class="kal-row">
+          <label class="kal-field kal-narrow">
+            <span>color</span>
+            <input type="color" id="kal-color" value="#243ec4" />
+          </label>
+          <label class="kal-field">
+            <span>textura</span>
+            <select id="kal-texture"></select>
+          </label>
+          <label class="kal-field">
+            <span>material</span>
+            <select id="kal-material"></select>
+          </label>
+          <label class="kal-field">
+            <span>opacidad <b id="kal-alpha-val">85%</b></span>
+            <input type="range" id="kal-alpha" min="5" max="100" value="85" />
+          </label>
+        </div>
+
+        <div class="kal-row kal-row-tight">
+          <label class="kal-field">
+            <span>reparto en la cámara</span>
+            <select id="kal-layout"></select>
+          </label>
+          <button class="gc-btn gc-toggle" type="button" id="kal-preview" aria-pressed="false" title="ver todos los objetos ya colocados">◉ ver cámara</button>
+        </div>
+
+        <p class="kal-selinfo" id="kal-sel-info"></p>
+
+        <div id="kal-list" class="kal-list"></div>
+
+        <div class="kal-btns">
+          <button class="btn-solid" type="button" id="kal-load">▼ introducir en el tubo</button>
+          <button class="btn-ghost" type="button" id="kal-undo">deshacer</button>
+          <button class="btn-ghost" type="button" id="kal-clear">vaciar</button>
+        </div>
+
+        <p class="kal-hint">un lienzo limpio por objeto: dibujas uno, se guarda en el muestrario y la cámara lo coloca sola · la <b>textura</b> es cómo está pintada, el <b>material</b> es cómo se comporta ante la luz · toca una ficha para reeditarla</p>
+      </div>
+
+      <!-- ── el tubo: vista por el ocular ── -->
+      <div class="kal-pane" id="kal-tube-pane">
+        <div class="panel-label">
+          <span>el tubo — por el ocular</span>
+          <span class="kal-count" id="kal-badge">vacío</span>
+        </div>
+
+        <div class="kal-lens-wrap">
+          <div class="kal-lens" id="kal-lens">
+            <canvas id="kal-canvas"></canvas>
+            <canvas id="kal-ring" aria-hidden="true"></canvas>
+            <div class="kal-empty" id="kal-empty">la cámara está vacía<br><span>dibuja algo y pulsa «introducir»</span></div>
+          </div>
+        </div>
+
+        <div class="kal-hud">
+          <div class="kal-ctrls">
+            <label class="kal-slider">
+              <span>espejos <b id="kal-seg-val">6 × 2</b></span>
+              <input type="range" id="kal-seg" min="2" max="14" step="1" value="6" />
+            </label>
+            <label class="kal-slider">
+              <span>acercar</span>
+              <input type="range" id="kal-zoom" min="35" max="300" step="1" value="100" />
+            </label>
+            <label class="kal-slider">
+              <span>giro</span>
+              <input type="range" id="kal-spin" min="-120" max="120" step="1" value="14" />
+            </label>
+            <label class="kal-slider">
+              <span>prisma</span>
+              <input type="range" id="kal-prism" min="0" max="100" step="1" value="55" />
+            </label>
+            <label class="kal-slider">
+              <span>temblor</span>
+              <input type="range" id="kal-warp" min="0" max="100" step="1" value="45" />
+            </label>
+            <label class="kal-slider">
+              <span>plomo</span>
+              <input type="range" id="kal-lead" min="0" max="100" step="1" value="60" />
+            </label>
+            <label class="kal-slider kal-wide">
+              <span>aura</span>
+              <input type="range" id="kal-aura" min="0" max="200" step="1" value="85" />
+            </label>
+          </div>
+
+          <div class="kal-btns">
+            <button class="gc-btn gc-toggle on" type="button" id="kal-auto" aria-pressed="true" title="giro automático">◉ girar solo</button>
+            <button class="gc-btn gc-toggle on" type="button" id="kal-glyphs" aria-pressed="true" title="anillo de glifos">✶ glifos</button>
+            <button class="gc-btn" type="button" id="kal-fs" title="pantalla completa (tecla F)">⛶ pantalla completa</button>
+            <button class="gc-btn" type="button" id="kal-shot" title="guardar la vista actual">↓ png</button>
+          </div>
+        </div>
+
+        <p class="kal-hint">arrastra para girar el tubo · rueda para acercar · doble clic: giro automático · F: pantalla completa</p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- autómatas -->
+  <section id="sec-automatas" class="sec">
+    <div class="sec-head">
+      <span class="sec-kicker">05 — engranajes</span>
+      <h2 class="sec-title">Autómatas</h2>
+      <p class="sec-hint">reparte la materia entre brazos, piernas, coraza, núcleo e inteligencia — luego bájalo a la arena: cinco rivales esperan en fila</p>
+    </div>
+
+    <div class="aut">
+
+      <!-- ── el banco: lámina de montaje ── -->
+      <div class="aut-pane">
+        <div class="panel-label">
+          <span>banco — lámina de montaje</span>
+          <span class="kal-count" id="aut-budget">materia 0 / 16</span>
+        </div>
+
+        <div class="aut-plate"><canvas id="aut-figure"></canvas></div>
+
+        <div class="aut-row">
+          <label class="kal-field">
+            <span>nombre del autómata</span>
+            <input id="aut-name" maxlength="22" placeholder="Autómata I" />
+          </label>
+        </div>
+
+        <div class="aut-parts" id="aut-parts"></div>
+
+        <div class="kal-btns">
+          <button class="btn-solid" type="button" id="aut-fight">▼ bajar a la arena</button>
+          <button class="btn-ghost" type="button" id="aut-random">al azar</button>
+          <button class="btn-ghost" type="button" id="aut-reset">reiniciar campaña</button>
+        </div>
+
+        <p class="kal-hint">de 1 a 8 por pieza, sin pasarte de la <b>materia</b> · toca un punto para fijar el valor · cada rival que cae te da <b>+2</b> para recalibrar · no hay autómata perfecto: hay elecciones</p>
+      </div>
+
+      <!-- ── la arena ── -->
+      <div class="aut-pane" id="aut-arena-pane">
+        <div class="panel-label">
+          <span>la arena — <b id="aut-level-name">nivel 1</b></span>
+          <span class="kal-count" id="aut-round">—</span>
+        </div>
+
+        <div class="aut-ring"><canvas id="aut-arena"></canvas></div>
+
+        <div class="aut-bars">
+          <div class="aut-bar" id="aut-bar-you">
+            <span class="ab-name">tu autómata</span>
+            <span class="ab-track"><i style="width:100%"></i></span>
+            <span class="ab-hp">—</span>
+          </div>
+          <div class="aut-bar aut-bar-foe" id="aut-bar-foe">
+            <span class="ab-name">—</span>
+            <span class="ab-track"><i style="width:100%"></i></span>
+            <span class="ab-hp">—</span>
+          </div>
+        </div>
+
+        <div class="aut-log" id="aut-log"></div>
+
+        <div class="aut-levels" id="aut-levels"></div>
+
+        <div class="kal-btns">
+          <button class="btn-solid" type="button" id="aut-action">▷ empezar</button>
+          <button class="gc-btn gc-toggle" type="button" id="aut-fast" aria-pressed="false" title="acelerar el combate">≫ rápido</button>
+        </div>
+
+        <p class="kal-hint">el combate se resuelve solo: el <b>paso</b> decide quién abre, la <b>coraza</b> resta de cada golpe y la <b>inteligencia</b> va leyendo el patrón ronda a ronda</p>
+      </div>
+
+    </div>
+  </section>
+
 </div>
 
 <!-- ═══ FOOTER ═══ -->
@@ -203,5 +414,7 @@
 <script src="pointer.js?v=12"></script>
 <script src="ascii.js?v=9"></script>
 <script src="garden.js?v=9"></script>
+<script src="kaleidoscopio.js?v=3"></script>
+<script src="automatas.js?v=1"></script>
 </body>
 </html>

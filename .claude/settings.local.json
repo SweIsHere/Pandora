@@ -58,7 +58,17 @@
       "PowerShell($scratch = \"C:\\\\Users\\\\USER\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-USER-Desktop-Proyectos-Pandora\\\\98afa8f9-f07d-4896-a42b-047a8bc84a10\\\\scratchpad\"; & \"C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe\" --headless=new --disable-gpu --enable-unsafe-swiftshader --no-first-run --mute-audio --autoplay-policy=no-user-gesture-required --user-data-dir=\"$scratch\\\\prof3\" --window-size=1400,900 --virtual-time-budget=15000 --screenshot=\"$scratch\\\\report.png\" \"http://127.0.0.1:8123/_t.html\"; \"ok\")",
       "PowerShell($scratch = \"C:\\\\Users\\\\USER\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-USER-Desktop-Proyectos-Pandora\\\\98afa8f9-f07d-4896-a42b-047a8bc84a10\\\\scratchpad\"; & \"C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe\" --headless=new --disable-gpu --enable-unsafe-swiftshader --no-first-run --mute-audio --autoplay-policy=no-user-gesture-required --user-data-dir=\"$scratch\\\\prof5\" --window-size=1400,900 --virtual-time-budget=15000 --screenshot=\"$scratch\\\\final2.png\" \"http://127.0.0.1:8123/_t.html\"; \"ok\")",
       "PowerShell($scratch = \"C:\\\\Users\\\\USER\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-USER-Desktop-Proyectos-Pandora\\\\98afa8f9-f07d-4896-a42b-047a8bc84a10\\\\scratchpad\"; & \"C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe\" --headless=new --disable-gpu --enable-unsafe-swiftshader --no-first-run --mute-audio --autoplay-policy=no-user-gesture-required --user-data-dir=\"$scratch\\\\prof6\" --window-size=1400,900 --virtual-time-budget=15000 --screenshot=\"$scratch\\\\final3.png\" \"http://127.0.0.1:8123/_t.html\"; \"ok\")",
-      "PowerShell(Remove-Item *)"
+      "PowerShell(Remove-Item *)",
+      "Bash(grep -n \"^/\\\\* \\\\|^\\\\.sec\\\\|^\\\\.garden\\\\|^:root\\\\|--[a-z-]*:\" style.css)",
+      "Bash(node -e \"const s=require\\('fs'\\).readFileSync\\('three.min.js','utf8'\\); const m=s.match\\(/REVISION\\\\s*=\\\\s*[\\\\\"']?\\([\\\\w.]+\\)/\\); console.log\\(m&&m[1]\\); console.log\\(/ExtrudeGeometry/.test\\(s\\), /MeshPhysicalMaterial/.test\\(s\\), /sRGBEncoding/.test\\(s\\), /outputColorSpace/.test\\(s\\)\\);\")",
+      "Bash(grep -o \"REVISION=e[^;]\\\\{0,5\\\\}\\\\|const e=\\\\\"1[0-9][0-9]\\\\\"\" three.min.js)",
+      "Bash(grep -n \"^\\\\s*/\\\\*\\\\|^\\\\s*--\\\\|:root\\\\|--ink\\\\|--paper\\\\|--accent\\\\|font-family\" style.css)",
+      "Bash(node -e \"const s=require\\('fs'\\).readFileSync\\('three.min.js','utf8'\\);const m=s.match\\(/REVISION\\\\s*=\\\\s*[\\\\\"']\\([^\\\\\"']+\\)/\\);console.log\\(m&&m[1]\\);\")",
+      "Bash(grep -o \"REVISION[^,;]\\\\{0,20\\\\}\" three.min.js)",
+      "Bash(grep -o \"REVISION=e[,;][^;]\\\\{0,60\\\\}\" three.min.js)",
+      "Bash(node --check kaleidoscopio.js)",
+      "Bash(node -e ' *)",
+      "PowerShell($c = Get-Command node,deno,bun -ErrorAction SilentlyContinue; if \\($c\\) { $c.Source } else { \"ninguno\" })"
     ]
   }
 }
