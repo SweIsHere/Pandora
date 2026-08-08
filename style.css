@@ -1450,10 +1450,15 @@ input[type="color"] { padding: 3px; height: 38px; cursor: pointer; }
    arena también — aquí no hay tinta de fondo: son planchas de
    manual, no vidrio. */
 .aut {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 18px;
-  align-items: start;
+}
+/* el ruedo se sale del ancho de lectura hasta el canto de la
+   sección: es el escenario, no una ficha más */
+#aut-arena-pane {
+  width: calc(100% + 72px);
+  margin-left: -36px;
 }
 
 .aut-pane {
@@ -1485,6 +1490,24 @@ input[type="color"] { padding: 3px; height: 38px; cursor: pointer; }
   border-radius: 3px;
   background: rgba(255,255,255,.42);
 }
+/* el ruedo se pelea con el ratón: nada de selección ni scroll táctil */
+#aut-arena {
+  touch-action: none;
+  user-select: none;
+  cursor: var(--cur-hand, pointer);
+}
+/* mientras se pelea, el canto del panel se enciende */
+#aut-arena-pane.peleando #aut-arena { border-color: var(--blue); }
+
+/* el banco: la lámina a la izquierda, el reparto a la derecha */
+.aut-banco {
+  display: grid;
+  grid-template-columns: minmax(220px, 42%) 1fr;
+  gap: 0;
+}
+.aut-banco .aut-plate { border-right: 1px solid var(--divider); }
+.aut-banco-side { display: flex; flex-direction: column; }
+.aut-banco-side .kal-btns { margin-top: auto; }
 
 .aut-row { padding: 12px 12px 2px; }
 .aut-row .kal-field input { padding: 6px 9px; font-size: .82rem; }
@@ -1603,12 +1626,123 @@ input[type="color"] { padding: 3px; height: 38px; cursor: pointer; }
 .aut-bar.low .ab-track i { background: #c0392b; }
 .aut-bar.out { opacity: .5; }
 .aut-bar.out .ab-track i { background: var(--muted); }
+/* ganó la mano con una parada limpia: el siguiente golpe va reforzado */
+.aut-bar.mano .ab-name::after {
+  content: " ↯ mano";
+  font-size: .52rem;
+  letter-spacing: .06em;
+  color: var(--blue);
+}
+
+/* ── el mando ──
+   A la izquierda la chuleta de teclas; a la derecha la altura del
+   filo, ordenada verticalmente (arriba, en medio, abajo) para que
+   se lea como lo que es: dónde está la punta. */
+.aut-cmd {
+  display: grid;
+  grid-template-columns: 1fr 132px;
+  gap: 8px 12px;
+  padding: 12px;
+  border-top: 1px solid var(--divider);
+  background: rgba(255,255,255,.28);
+  transition: opacity .15s;
+}
+.aut-cmd.off { opacity: .45; }
+
+.ac-keys {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px 10px;
+}
+.ac-keys .ac-tag { flex: 1 0 100%; }
+.ac-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: .6rem;
+  letter-spacing: .04em;
+  color: var(--muted);
+}
+.ac-key b {
+  font-weight: normal;
+  font-size: .58rem;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--bevel-dk);
+  border-top-color: var(--bevel-lt);
+  border-left-color: var(--bevel-lt);
+  border-radius: 3px;
+  padding: 2px 5px;
+  line-height: 1;
+}
+.ac-key-hit b { color: #fff; background: var(--blue); border-color: var(--blue); }
+
+.ac-col { display: flex; flex-direction: column; gap: 4px; }
+.ac-tag {
+  font-family: var(--mono);
+  font-size: .56rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 1px;
+}
+
+.ac-h {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 8px;
+  font-family: var(--mono);
+  font-size: .66rem;
+  letter-spacing: .03em;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--bevel-dk);
+  border-top-color: var(--bevel-lt);
+  border-left-color: var(--bevel-lt);
+  border-radius: 4px;
+  cursor: var(--cur-hand, pointer);
+  transition: color .12s, background .12s, border-color .12s, transform .06s;
+}
+.ac-h b {
+  font-weight: normal;
+  font-size: .8rem;
+  line-height: 1;
+  width: 13px;
+  text-align: center;
+  color: var(--blue);
+}
+.ac-h i {
+  margin-left: auto;
+  font-style: normal;
+  font-size: .52rem;
+  letter-spacing: .04em;
+  color: var(--muted);
+  border: 1px solid var(--divider);
+  border-radius: 2px;
+  padding: 0 3px;
+}
+.ac-h:hover:not(:disabled) { border-color: var(--blue); }
+.ac-h:active:not(:disabled) { transform: translateY(1px); }
+.ac-h:disabled { opacity: .4; cursor: default; }
+
+/* la altura elegida: el filo está ahí */
+.ac-h.on {
+  color: #fff;
+  background: var(--blue);
+  border-color: var(--blue);
+}
+.ac-h.on b, .ac-h.on i { color: #fff; }
+.ac-h.on i { border-color: rgba(255,255,255,.45); }
 
 /* ── el diario del combate ── */
 .aut-log {
-  margin: 4px 12px 0;
+  margin: 4px 12px 12px;
   padding: 9px 10px;
-  height: 132px;
+  height: 96px;
   overflow-y: auto;
   background: rgba(255,255,255,.42);
   border: 1px solid var(--bevel-dk);
@@ -1622,6 +1756,9 @@ input[type="color"] { padding: 3px; height: 38px; cursor: pointer; }
 @keyframes aut-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; } }
 .aut-sep    { color: var(--muted); letter-spacing: .1em; margin-top: 4px; }
 .aut-flavor { color: var(--muted); font-style: italic; }
+.aut-choice { color: var(--text); opacity: .9; }
+.aut-clash  { color: #c0392b; letter-spacing: .04em; }
+.aut-parry  { color: var(--blue); }
 .aut-you    { color: var(--blue); }
 .aut-foe    { color: #a5442f; }
 .aut-crit   { color: #c0392b; }
@@ -1654,8 +1791,33 @@ input[type="color"] { padding: 3px; height: 38px; cursor: pointer; }
 .aut-pane .kal-btns .btn-solid:disabled { opacity: .45; cursor: default; }
 .aut-pane .kal-btns .btn-solid:disabled:hover { background: var(--text); }
 
+/* ── pantalla completa: el ruedo se come la pantalla ──
+   Como en el tubo del kaleidoscopio, cuelga de una clase puesta
+   por JS (.aut-fs) y no del pseudo-selector :fullscreen. */
+#aut-arena-pane.aut-fs {
+  width: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+#aut-arena-pane.aut-fs > .kal-hint,
+#aut-arena-pane.aut-fs > .aut-levels { display: none; }
+#aut-arena-pane.aut-fs .aut-ring {
+  flex: 1;
+  display: flex;
+  padding: 8px;
+}
+#aut-arena-pane.aut-fs .aut-ring canvas { height: 100%; }
+
 @media (max-width: 720px) {
-  .aut { grid-template-columns: 1fr; }
+  #aut-arena-pane { width: 100%; margin-left: 0; }
+  .aut-banco { grid-template-columns: 1fr; }
+  .aut-banco .aut-plate { border-right: 0; border-bottom: 1px solid var(--divider); }
+  .aut-cmd { grid-template-columns: 1fr; }
   .aut-part { grid-template-columns: 74px 1fr auto; }
   .ap-derived { padding-left: 82px; }
 }

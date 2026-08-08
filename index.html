@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Pandora</title>
-<link rel="stylesheet" href="style.css?v=28" />
+<link rel="stylesheet" href="style.css?v=31" />
 </head>
 <body>
 
@@ -287,43 +287,16 @@
     <div class="sec-head">
       <span class="sec-kicker">05 — engranajes</span>
       <h2 class="sec-title">Autómatas</h2>
-      <p class="sec-hint">reparte la materia entre brazos, piernas, coraza, núcleo e inteligencia — luego bájalo a la arena: cinco rivales esperan en fila</p>
+      <p class="sec-hint">reparte la materia, monta tu autómata y bájalo al ruedo — corres, saltas y estocas tú: cinco rivales en fila</p>
     </div>
 
     <div class="aut">
 
-      <!-- ── el banco: lámina de montaje ── -->
-      <div class="aut-pane">
-        <div class="panel-label">
-          <span>banco — lámina de montaje</span>
-          <span class="kal-count" id="aut-budget">materia 0 / 16</span>
-        </div>
-
-        <div class="aut-plate"><canvas id="aut-figure"></canvas></div>
-
-        <div class="aut-row">
-          <label class="kal-field">
-            <span>nombre del autómata</span>
-            <input id="aut-name" maxlength="22" placeholder="Autómata I" />
-          </label>
-        </div>
-
-        <div class="aut-parts" id="aut-parts"></div>
-
-        <div class="kal-btns">
-          <button class="btn-solid" type="button" id="aut-fight">▼ bajar a la arena</button>
-          <button class="btn-ghost" type="button" id="aut-random">al azar</button>
-          <button class="btn-ghost" type="button" id="aut-reset">reiniciar campaña</button>
-        </div>
-
-        <p class="kal-hint">de 1 a 8 por pieza, sin pasarte de la <b>materia</b> · toca un punto para fijar el valor · cada rival que cae te da <b>+2</b> para recalibrar · no hay autómata perfecto: hay elecciones</p>
-      </div>
-
-      <!-- ── la arena ── -->
+      <!-- ── el ruedo: estadio ASCII a todo lo ancho ── -->
       <div class="aut-pane" id="aut-arena-pane">
         <div class="panel-label">
-          <span>la arena — <b id="aut-level-name">nivel 1</b></span>
-          <span class="kal-count" id="aut-round">—</span>
+          <span>el ruedo — <b id="aut-level-name">nivel 1</b></span>
+          <span class="kal-count" id="aut-round">─ filo media</span>
         </div>
 
         <div class="aut-ring"><canvas id="aut-arena"></canvas></div>
@@ -341,16 +314,66 @@
           </div>
         </div>
 
-        <div class="aut-log" id="aut-log"></div>
+        <!-- el mando: teclas a la izquierda, altura del filo a la derecha -->
+        <div class="aut-cmd" id="aut-cmd">
+          <div class="ac-keys">
+            <span class="ac-tag">mando</span>
+            <span class="ac-key"><b>A</b><b>D</b>correr</span>
+            <span class="ac-key"><b>W</b>saltar</span>
+            <span class="ac-key"><b>S</b>agacharse</span>
+            <span class="ac-key"><b>espacio</b>girar el filo</span>
+            <span class="ac-key ac-key-hit"><b>clic</b>estocada</span>
+          </div>
+          <div class="ac-col">
+            <span class="ac-tag">filo</span>
+            <button class="ac-h" type="button" data-h="alta"  aria-pressed="false"><b>▔</b>alta<i>1</i></button>
+            <button class="ac-h on" type="button" data-h="media" aria-pressed="true"><b>─</b>media<i>2</i></button>
+            <button class="ac-h" type="button" data-h="baja"  aria-pressed="false"><b>▁</b>baja<i>3</i></button>
+          </div>
+        </div>
 
         <div class="aut-levels" id="aut-levels"></div>
 
         <div class="kal-btns">
-          <button class="btn-solid" type="button" id="aut-action">▷ empezar</button>
-          <button class="gc-btn gc-toggle" type="button" id="aut-fast" aria-pressed="false" title="acelerar el combate">≫ rápido</button>
+          <button class="btn-solid" type="button" id="aut-action">▷ a la arena</button>
+          <button class="gc-btn gc-toggle on" type="button" id="aut-snd" aria-pressed="true" title="ovación del público">♪ público</button>
+          <button class="gc-btn" type="button" id="aut-fs" title="pantalla completa">⛶ pantalla completa</button>
         </div>
 
-        <p class="kal-hint">el combate se resuelve solo: el <b>paso</b> decide quién abre, la <b>coraza</b> resta de cada golpe y la <b>inteligencia</b> va leyendo el patrón ronda a ronda</p>
+        <p class="kal-hint">el filo está <b>siempre vivo</b>: si te cruzas con su hoja te empalas · estocar la lanza más lejos y con todo el peso · dos filos a la <b>misma altura</b> chocan y os rebotan · agacharse pasa por debajo de una guardia alta, saltar salva una baja</p>
+      </div>
+
+      <!-- ── el banco: lámina de montaje ── -->
+      <div class="aut-pane" id="aut-banco-pane">
+        <div class="panel-label">
+          <span>banco — lámina de montaje</span>
+          <span class="kal-count" id="aut-budget">materia 0 / 16</span>
+        </div>
+
+        <div class="aut-banco">
+          <div class="aut-plate"><canvas id="aut-figure"></canvas></div>
+
+          <div class="aut-banco-side">
+            <div class="aut-row">
+              <label class="kal-field">
+                <span>nombre del autómata</span>
+                <input id="aut-name" maxlength="22" placeholder="Autómata I" />
+              </label>
+            </div>
+
+            <div class="aut-parts" id="aut-parts"></div>
+
+            <div class="kal-btns">
+              <button class="btn-solid" type="button" id="aut-fight">▼ bajar a la arena</button>
+              <button class="btn-ghost" type="button" id="aut-random">al azar</button>
+              <button class="btn-ghost" type="button" id="aut-reset">reiniciar</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="aut-log" id="aut-log"></div>
+
+        <p class="kal-hint">de 1 a 8 por pieza, sin pasarte de la <b>materia</b> · los números son la física: <b>piernas</b> mandan la carrera y el salto, <b>brazos</b> el alcance del filo · cada rival que cae te da <b>+2</b> para recalibrar</p>
       </div>
 
     </div>
@@ -415,6 +438,6 @@
 <script src="ascii.js?v=9"></script>
 <script src="garden.js?v=9"></script>
 <script src="kaleidoscopio.js?v=3"></script>
-<script src="automatas.js?v=1"></script>
+<script src="automatas.js?v=5"></script>
 </body>
 </html>
